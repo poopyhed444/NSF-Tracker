@@ -84,89 +84,130 @@ class ORCIDLookup:
         """
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
-                # Search for the person
-                search_query = f'given-names:{name.split()[0]} AND family-name:{name.split()[-1]}'
-                if len(name.split()) > 2:
-                    # Handle middle names
-                    middle_names = ' '.join(name.split()[1:-1])
-                    search_query += f' AND other-names:{middle_names}'
-                
+                # Parse name for ORCID search
+                clean_name = name.replace(":", "").strip()
+                if "," in clean_name:
+                    # Format: LASTNAME, FIRSTNAME MIDDLENAME
+                    family, given_and_middle = [part.strip() for part in clean_name.split(",", 1)]
+                    given_parts = given_and_middle.split()
+                    given = given_parts[0] if given_parts else ""
+                    middle = ' '.join(given_parts[1:]) if len(given_parts) > 1 else ""
+                else:
+                    # Format: FIRSTNAME MIDDLENAME LASTNAME
+                    name_parts = clean_name.split()
+                    given = name_parts[0] if len(name_parts) > 0 else ""
+                    family = name_parts[-1] if len(name_parts) > 1 else ""
+                    middle = ' '.join(name_parts[1:-1]) if len(name_parts) > 2 else ""
+
+                search_query = f'given-names:{given} AND family-name:{family}'
+                if middle:
+                    search_query += f' AND other-names:{middle}'
+
                 headers = {
                     'Accept': 'application/json',
                     'User-Agent': 'NIH-NSF-Tracker/1.0'
                 }
-                
+
                 params = {
                     'q': search_query,
                     'rows': 20
                 }
-                
+
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write(f"[DEBUG] ORCID search_query: {search_query}\n")
                 response = await client.get(ORCIDLookup.ORCID_SEARCH_URL, 
                                           headers=headers, params=params)
                 response.raise_for_status()
                 search_data = response.json()
-                
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write(f"[DEBUG] ORCID search_data: {search_data}\n")
+
                 for result in search_data.get('result', []):
                     orcid_id = result.get('orcid-identifier', {}).get('path')
                     if not orcid_id:
                         continue
-                    
+
                     # Get detailed record
                     record_url = f"{ORCIDLookup.ORCID_RECORD_URL}/{orcid_id}/record"
                     record_response = await client.get(record_url, headers=headers)
                     record_response.raise_for_status()
                     record_data = record_response.json()
-                    
+                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                        debug_log.write(f"[DEBUG] ORCID record_data for {orcid_id}: {record_data}\n")
+
                     # Check if institution matches
                     department = ORCIDLookup._extract_department_from_record(
                         record_data, institution)
+                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                        debug_log.write(f"[DEBUG] Extracted department: {department} (type: {type(department)})\n")
                     if department:
+                        with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                            debug_log.write(f"[DEBUG] Returning department: {department}, confidence: 'high'\n")
                         return department, "high"
-                
+
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write("[DEBUG] No matching department found in ORCID results.\n")
                 return None
-                
+
             except Exception as e:
-                print(f"ORCID lookup error: {e}")
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write(f"ORCID lookup error: {e}\n")
+                    import traceback
+                    import io
+                    buf = io.StringIO()
+                    traceback.print_exc(file=buf)
+                    debug_log.write(buf.getvalue())
                 return None
     
     @staticmethod
     def _extract_department_from_record(record_data: Dict, target_institution: str) -> Optional[str]:
-        """Extract department from ORCID record if institution matches."""
+        """Extract department from ORCID record if institution matches. Handles nested ORCID structure."""
         try:
             activities = record_data.get('activities-summary', {})
-            employments = activities.get('employments', {}).get('employment-summary', [])
-            
             target_institution_lower = target_institution.lower()
-            
-            for employment in employments:
-                org_name = employment.get('organization', {}).get('name', '').lower()
-                dept_name = employment.get('department-name')
-                
-                # Check if organization matches (fuzzy match)
-                if any(word in org_name for word in target_institution_lower.split() if len(word) > 3):
-                    if dept_name:
-                        return dept_name
-                    
-                    # Try to extract from role title
-                    role_title = employment.get('role-title', '')
-                    if role_title:
-                        # Look for department keywords in role title
-                        dept_keywords = [
-                            'department', 'dept', 'school of', 'division of',
-                            'center for', 'institute'
-                        ]
-                        role_lower = role_title.lower()
-                        for keyword in dept_keywords:
-                            if keyword in role_lower:
-                                # Extract text after keyword
-                                parts = role_lower.split(keyword)
-                                if len(parts) > 1:
-                                    potential_dept = parts[1].strip().split(',')[0].strip()
-                                    if potential_dept:
-                                        return potential_dept.title()
-            
+
+            # Helper to check org match
+            def org_matches(org_name):
+                return any(word in org_name for word in target_institution_lower.split() if len(word) > 3)
+
+            # Check employments (nested structure)
+            employments = activities.get('employments', {}).get('affiliation-group', [])
+            for group in employments:
+                for summary in group.get('summaries', []):
+                    employment = summary.get('employment-summary', {})
+                    org_name = employment.get('organization', {}).get('name', '').lower()
+                    dept_name = employment.get('department-name')
+                    if org_matches(org_name):
+                        if dept_name:
+                            return dept_name
+                        # Try to extract from role title
+                        role_title = employment.get('role-title', '')
+                        if role_title:
+                            dept_keywords = [
+                                'department', 'dept', 'school of', 'division of',
+                                'center for', 'institute'
+                            ]
+                            role_lower = role_title.lower()
+                            for keyword in dept_keywords:
+                                if keyword in role_lower:
+                                    parts = role_lower.split(keyword)
+                                    if len(parts) > 1:
+                                        potential_dept = parts[1].strip().split(',')[0].strip()
+                                        if potential_dept:
+                                            return potential_dept.title()
+
+            # Check educations (nested structure)
+            educations = activities.get('educations', {}).get('affiliation-group', [])
+            for group in educations:
+                for summary in group.get('summaries', []):
+                    education = summary.get('education-summary', {})
+                    org_name = education.get('organization', {}).get('name', '').lower()
+                    dept_name = education.get('department-name')
+                    if org_matches(org_name):
+                        if dept_name:
+                            return dept_name
+
             return None
-            
         except Exception as e:
             print(f"Error extracting department from ORCID record: {e}")
             return None
