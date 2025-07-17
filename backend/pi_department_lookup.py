@@ -207,9 +207,86 @@ class ORCIDLookup:
                         if dept_name:
                             return dept_name
 
+            # If no department found from employments/educations, analyze works using NLP
+            works_dept = ORCIDLookup._analyze_works_for_department(activities)
+            if works_dept:
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write(f"[DEBUG] NLP analysis found department: {works_dept}\n")
+                return works_dept
+
             return None
         except Exception as e:
             print(f"Error extracting department from ORCID record: {e}")
+            return None
+
+    @staticmethod
+    def _analyze_works_for_department(activities: Dict) -> Optional[str]:
+        """Analyze ORCID works/publications to guess department using NLP."""
+        try:
+            works = activities.get('works', {}).get('group', [])
+            if not works:
+                return None
+
+            # Collect titles and journal names from works
+            text_content = []
+            for work_group in works:
+                for work_summary in work_group.get('work-summary', []):
+                    title = work_summary.get('title', {})
+                    if title and title.get('title', {}).get('value'):
+                        text_content.append(title['title']['value'])
+                    
+                    journal = work_summary.get('journal-title', {})
+                    if journal and journal.get('value'):
+                        text_content.append(journal['value'])
+
+            if not text_content:
+                return None
+
+            # Combine all text
+            combined_text = ' '.join(text_content).lower()
+
+            # Department keywords and scoring
+            dept_keywords = {
+                'biology': ['biology', 'biological', 'molecular biology', 'cell biology', 'genetics', 'genomics', 'biotechnology', 'life sciences'],
+                'chemistry': ['chemistry', 'chemical', 'biochemistry', 'organic chemistry', 'inorganic chemistry', 'analytical chemistry'],
+                'physics': ['physics', 'physical', 'quantum', 'optics', 'mechanics', 'thermodynamics', 'electromagnetic'],
+                'engineering': ['engineering', 'mechanical', 'electrical', 'civil', 'bioengineering', 'biomedical engineering', 'computer engineering'],
+                'medicine': ['medicine', 'medical', 'clinical', 'therapeutic', 'pharmacology', 'pathology', 'oncology', 'cardiology'],
+                'neuroscience': ['neuroscience', 'neurological', 'brain', 'neural', 'cognitive', 'behavioral neuroscience'],
+                'computer science': ['computer', 'computational', 'algorithm', 'machine learning', 'artificial intelligence', 'software'],
+                'psychology': ['psychology', 'psychological', 'behavioral', 'cognitive psychology', 'social psychology'],
+                'mathematics': ['mathematics', 'mathematical', 'statistics', 'statistical', 'probability', 'algebra', 'calculus'],
+                'environmental science': ['environmental', 'ecology', 'climate', 'sustainability', 'ecosystem', 'conservation'],
+                'materials science': ['materials', 'nanomaterials', 'polymer', 'ceramic', 'metallurgy', 'composite'],
+                'geology': ['geology', 'geological', 'earth science', 'geophysics', 'mineralogy', 'petrology'],
+                'astronomy': ['astronomy', 'astrophysics', 'cosmology', 'planetary', 'stellar', 'galactic'],
+                'anthropology': ['anthropology', 'anthropological', 'archaeological', 'cultural', 'ethnographic'],
+                'sociology': ['sociology', 'sociological', 'social science', 'demography', 'criminology'],
+                'economics': ['economics', 'economic', 'econometrics', 'finance', 'business', 'market'],
+                'education': ['education', 'educational', 'pedagogy', 'curriculum', 'learning', 'teaching']
+            }
+
+            # Score each department
+            dept_scores = {}
+            for dept, keywords in dept_keywords.items():
+                score = 0
+                for keyword in keywords:
+                    if keyword in combined_text:
+                        # Weight longer phrases higher
+                        score += len(keyword.split()) * combined_text.count(keyword)
+                dept_scores[dept] = score
+
+            # Find department with highest score
+            if dept_scores:
+                best_dept = max(dept_scores, key=dept_scores.get)
+                if dept_scores[best_dept] > 0:
+                    return best_dept.title()
+
+            return None
+
+        except Exception as e:
+            with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                debug_log.write(f"Error analyzing works for department: {e}\n")
             return None
 
 class DepartmentNormalizer:
