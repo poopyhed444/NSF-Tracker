@@ -229,6 +229,7 @@ class ORCIDLookup:
 
             # Collect titles and journal names from works
             text_content = []
+            journal_titles = []
             for work_group in works:
                 for work_summary in work_group.get('work-summary', []):
                     title = work_summary.get('title', {})
@@ -237,7 +238,9 @@ class ORCIDLookup:
                     
                     journal = work_summary.get('journal-title', {})
                     if journal and journal.get('value'):
-                        text_content.append(journal['value'])
+                        journal_title = journal['value']
+                        text_content.append(journal_title)
+                        journal_titles.append(journal_title)
 
             if not text_content:
                 return None
@@ -251,7 +254,37 @@ class ORCIDLookup:
                 'chemistry': ['chemistry', 'chemical', 'biochemistry', 'organic chemistry', 'inorganic chemistry', 'analytical chemistry'],
                 'physics': ['physics', 'physical', 'quantum', 'optics', 'mechanics', 'thermodynamics', 'electromagnetic'],
                 'engineering': ['engineering', 'mechanical', 'electrical', 'civil', 'bioengineering', 'biomedical engineering', 'computer engineering'],
-                'medicine': ['medicine', 'medical', 'clinical', 'therapeutic', 'pharmacology', 'pathology', 'oncology', 'cardiology'],
+                'medicine': [
+                    'medicine', 'medical', 'clinical', 'therapeutic', 'pharmacology', 'pathology', 'oncology', 'cardiology',
+                    'internal medicine', 'infectious disease', 'endocrinology', 'rheumatology', 'hematology', 'gastroenterology',
+                    'pulmonology', 'nephrology', 'geriatrics', 'hospital medicine', 'primary care', 'family medicine', 'general practice',
+                    'obstetrics', 'gynecology', 'ob/gyn', 'obstetrics and gynecology', 'maternal-fetal medicine', 'perinatology',
+                    'reproductive medicine', 'women\'s health', 'pediatrics', 'neonatology', 'adolescent medicine', 'emergency medicine',
+                    'critical care', 'anesthesiology', 'dermatology', 'urology', 'orthopedics', 'orthopaedics', 'plastic surgery',
+                    'otolaryngology', 'ophthalmology', 'radiology', 'nuclear medicine', 'sports medicine', 'pain medicine', 'allergy', 'immunology',
+                    'psychiatry', 'psychosomatic', 'forensic medicine', 'toxicology', 'occupational medicine', 'preventive medicine', 'public health',
+                    'obstetric', 'gynecologic', 'obstetrician', 'gynecologist', 'obstetricians', 'gynecologists', 'ob gyn', 'obgyn', 'ob-gyn',
+                    'obstetrician-gynecologist', 'obstetrician gynecologist', 'obstetrics & gynecology', 'obstetrics & gynaecology', 'gynaecology',
+                    'maternal health', 'perinatal', 'perinatal medicine', 'reproductive endocrinology', 'reproductive endocrinologist',
+                    'reproductive endocrinology and infertility', 'infertility', 'fertility', 'fetal medicine', 'placenta', 'placental', 'pregnancy',
+                    'prenatal', 'peripartum', 'postpartum', 'labor and delivery', 'labor & delivery', 'labor/delivery', 'obstetric care', 'gynecologic oncology',
+                    'urogynecology', 'urogynecologic', 'urogynecology', 'minimally invasive gynecology', 'minimally invasive surgery', 'reproductive biology',
+                    'reproductive science', 'reproductive health', 'women\'s reproductive health', 'women\'s medicine', 'women\'s hospital', 'women\'s clinic',
+                    'obstetric medicine', 'gynecologic medicine', 'obstetric surgery', 'gynecologic surgery', 'obstetrician/gynecologist', 'obstetrician gynecologist',
+                    'obstetrician-gynecologist', 'obstetrician gynecologist', 'obstetrician', 'gynecologist', 'obstetricians', 'gynecologists', 'ob gyn', 'obgyn', 'ob-gyn',
+                ],
+                'obstetrics and gynecology': [
+                    'obstetrics', 'gynecology', 'ob/gyn', 'obstetrics and gynecology', 'maternal-fetal medicine', 'perinatology',
+                    'reproductive medicine', 'women\'s health', 'obstetric', 'gynecologic', 'obstetrician', 'gynecologist', 'obstetricians', 'gynecologists',
+                    'ob gyn', 'obgyn', 'ob-gyn', 'obstetrician-gynecologist', 'obstetrician gynecologist', 'obstetrics & gynecology', 'obstetrics & gynaecology',
+                    'gynaecology', 'maternal health', 'perinatal', 'perinatal medicine', 'reproductive endocrinology', 'reproductive endocrinologist',
+                    'reproductive endocrinology and infertility', 'infertility', 'fertility', 'fetal medicine', 'placenta', 'placental', 'pregnancy',
+                    'prenatal', 'peripartum', 'postpartum', 'labor and delivery', 'labor & delivery', 'labor/delivery', 'obstetric care', 'gynecologic oncology',
+                    'urogynecology', 'urogynecologic', 'urogynecology', 'minimally invasive gynecology', 'minimally invasive surgery', 'reproductive biology',
+                    'reproductive science', 'reproductive health', 'women\'s reproductive health', 'women\'s medicine', 'women\'s hospital', 'women\'s clinic',
+                    'obstetric medicine', 'gynecologic medicine', 'obstetric surgery', 'gynecologic surgery', 'obstetrician/gynecologist', 'obstetrician gynecologist',
+                    'obstetrician-gynecologist', 'obstetrician gynecologist',
+                ],
                 'neuroscience': ['neuroscience', 'neurological', 'brain', 'neural', 'cognitive', 'behavioral neuroscience'],
                 'computer science': ['computer', 'computational', 'algorithm', 'machine learning', 'artificial intelligence', 'software'],
                 'psychology': ['psychology', 'psychological', 'behavioral', 'cognitive psychology', 'social psychology'],
@@ -265,6 +298,10 @@ class ORCIDLookup:
                 'economics': ['economics', 'economic', 'econometrics', 'finance', 'business', 'market'],
                 'education': ['education', 'educational', 'pedagogy', 'curriculum', 'learning', 'teaching']
             }
+            # If no department found, try external NLP API (placeholder)
+            if all(score == 0 for score in dept_scores.values()):
+                # Example: call_external_nlp_api(combined_text) and map result to department
+                pass  # You can implement this with OpenAI, HuggingFace, etc.
 
             # Score each department
             dept_scores = {}
@@ -275,6 +312,52 @@ class ORCIDLookup:
                         # Weight longer phrases higher
                         score += len(keyword.split()) * combined_text.count(keyword)
                 dept_scores[dept] = score
+
+            # Try to extract department from journal titles like 'Journal of ...'
+            import re
+            journal_dept_map = {
+                'biology': 'Biology',
+                'chemistry': 'Chemistry',
+                'physics': 'Physics',
+                'engineering': 'Engineering',
+                'medicine': 'Medicine',
+                'neuroscience': 'Neuroscience',
+                'computer science': 'Computer Science',
+                'psychology': 'Psychology',
+                'mathematics': 'Mathematics',
+                'environmental science': 'Environmental Science',
+                'materials science': 'Materials Science',
+                'geology': 'Geology',
+                'astronomy': 'Astronomy',
+                'anthropology': 'Anthropology',
+                'sociology': 'Sociology',
+                'economics': 'Economics',
+                'education': 'Education',
+                'immunology': 'Immunology',
+                'oncology': 'Oncology',
+                'cardiology': 'Cardiology',
+                'pharmacy': 'Pharmacy',
+                'biochemistry': 'Biochemistry',
+                'statistics': 'Statistics',
+                'biostatistics': 'Biostatistics',
+                'neurology': 'Neurology',
+                'internal medicine': 'Internal Medicine',
+                'pediatrics': 'Pediatrics',
+                'surgery': 'Surgery',
+                'cognitive science': 'Cognitive Science',
+                'computational biology': 'Computational Biology',
+            }
+            for jt in journal_titles:
+                m = re.search(r'journal of ([a-zA-Z &]+)', jt, re.IGNORECASE)
+                if m:
+                    possible = m.group(1).strip().lower()
+                    # Try direct match
+                    if possible in journal_dept_map:
+                        return journal_dept_map[possible]
+                    # Try partial match
+                    for key in journal_dept_map:
+                        if key in possible:
+                            return journal_dept_map[key]
 
             # Find department with highest score
             if dept_scores:
