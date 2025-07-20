@@ -12,6 +12,43 @@ import httpx
 import asyncio
 from typing import Dict, Optional, Tuple
 from datetime import datetime, timedelta
+import requests
+from scibert_classifier import predict_department_scibert, predict_from_research_context
+
+# --- Crossref-based department extraction utilities ---
+DEPT_VOCAB = [
+    "Biology","Chemistry","Physics","Mathematics",
+    "Computer Science","Neuroscience","Psychology",
+    "Immunology","Oncology","Engineering","Medicine"
+]
+
+def fetch_crossref_metadata(doi: str) -> dict:
+    """Fetch metadata for a DOI from Crossref."""
+    url = f"https://api.crossref.org/works/{doi}"
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    return resp.json().get("message", {})
+
+def find_pi_affiliation(metadata: dict, pi_name: str) -> str:
+    """Locate the PI in author list and return their first affiliation string."""
+    for author in metadata.get("author", []):
+        full = " ".join(filter(None, [author.get("given"), author.get("family")]))
+        if full.lower() == pi_name.lower():
+            affs = author.get("affiliation", [])
+            if affs:
+                return affs[0].get("name","")
+    return ""
+
+def extract_department(affiliation: str) -> str:
+    """Extract department from an affiliation using vocab and regex."""
+    text = affiliation or ""
+    for dept in DEPT_VOCAB:
+        if dept.lower() in text.lower():
+            return dept
+    m = re.search(r"department\s+of\s+([A-Za-z &\-]+)", text, re.I)
+    if m:
+        return m.group(1).strip().title()
+    return "Unknown"
 
 # Cache file path
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "pi_department_cache.json")
@@ -137,7 +174,7 @@ class ORCIDLookup:
 
                     # Check if institution matches
                     department = ORCIDLookup._extract_department_from_record(
-                        record_data, institution)
+                        record_data, institution, name)
                     with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
                         debug_log.write(f"[DEBUG] Extracted department: {department} (type: {type(department)})\n")
                     if department:
@@ -160,7 +197,7 @@ class ORCIDLookup:
                 return None
     
     @staticmethod
-    def _extract_department_from_record(record_data: Dict, target_institution: str) -> Optional[str]:
+    def _extract_department_from_record(record_data: Dict, target_institution: str, pi_name: str) -> Optional[str]:
         """Extract department from ORCID record if institution matches. Handles nested ORCID structure."""
         try:
             activities = record_data.get('activities-summary', {})
@@ -208,7 +245,7 @@ class ORCIDLookup:
                             return dept_name
 
             # If no department found from employments/educations, analyze works using NLP
-            works_dept = ORCIDLookup._analyze_works_for_department(activities)
+            works_dept = ORCIDLookup._analyze_works_for_department(activities, pi_name)
             if works_dept:
                 with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
                     debug_log.write(f"[DEBUG] NLP analysis found department: {works_dept}\n")
@@ -220,156 +257,68 @@ class ORCIDLookup:
             return None
 
     @staticmethod
-    def _analyze_works_for_department(activities: Dict) -> Optional[str]:
-        """Analyze ORCID works/publications to guess department using NLP."""
+    def _analyze_works_for_department(activities: Dict, pi_name: str) -> Optional[str]:
+        """Analyze ORCID works/publications to guess department using Crossref affiliations and SciBERT."""
         try:
             works = activities.get('works', {}).get('group', [])
-            if not works:
-                return None
-
-            # Collect titles and journal names from works
-            text_content = []
-            journal_titles = []
-            for work_group in works:
-                for work_summary in work_group.get('work-summary', []):
-                    title = work_summary.get('title', {})
-                    if title and title.get('title', {}).get('value'):
-                        text_content.append(title['title']['value'])
+            
+            # Collect research text for SciBERT analysis
+            titles = []
+            abstracts = []
+            affiliations = []
+            
+            # First try Crossref API lookup via DOI
+            for group in works:
+                for summary in group.get('work-summary', []):
+                    # Collect title for SciBERT
+                    title = summary.get('title', {}).get('title', {}).get('value', '')
+                    if title:
+                        titles.append(title)
                     
-                    journal = work_summary.get('journal-title', {})
-                    if journal and journal.get('value'):
-                        journal_title = journal['value']
-                        text_content.append(journal_title)
-                        journal_titles.append(journal_title)
-
-            if not text_content:
-                return None
-
-            # Combine all text
-            combined_text = ' '.join(text_content).lower()
-
-            # Department keywords and scoring
-            dept_keywords = {
-                'biology': ['biology', 'biological', 'molecular biology', 'cell biology', 'genetics', 'genomics', 'biotechnology', 'life sciences'],
-                'chemistry': ['chemistry', 'chemical', 'biochemistry', 'organic chemistry', 'inorganic chemistry', 'analytical chemistry'],
-                'physics': ['physics', 'physical', 'quantum', 'optics', 'mechanics', 'thermodynamics', 'electromagnetic'],
-                'engineering': ['engineering', 'mechanical', 'electrical', 'civil', 'bioengineering', 'biomedical engineering', 'computer engineering'],
-                'medicine': [
-                    'medicine', 'medical', 'clinical', 'therapeutic', 'pharmacology', 'pathology', 'oncology', 'cardiology',
-                    'internal medicine', 'infectious disease', 'endocrinology', 'rheumatology', 'hematology', 'gastroenterology',
-                    'pulmonology', 'nephrology', 'geriatrics', 'hospital medicine', 'primary care', 'family medicine', 'general practice',
-                    'obstetrics', 'gynecology', 'ob/gyn', 'obstetrics and gynecology', 'maternal-fetal medicine', 'perinatology',
-                    'reproductive medicine', 'women\'s health', 'pediatrics', 'neonatology', 'adolescent medicine', 'emergency medicine',
-                    'critical care', 'anesthesiology', 'dermatology', 'urology', 'orthopedics', 'orthopaedics', 'plastic surgery',
-                    'otolaryngology', 'ophthalmology', 'radiology', 'nuclear medicine', 'sports medicine', 'pain medicine', 'allergy', 'immunology',
-                    'psychiatry', 'psychosomatic', 'forensic medicine', 'toxicology', 'occupational medicine', 'preventive medicine', 'public health',
-                    'obstetric', 'gynecologic', 'obstetrician', 'gynecologist', 'obstetricians', 'gynecologists', 'ob gyn', 'obgyn', 'ob-gyn',
-                    'obstetrician-gynecologist', 'obstetrician gynecologist', 'obstetrics & gynecology', 'obstetrics & gynaecology', 'gynaecology',
-                    'maternal health', 'perinatal', 'perinatal medicine', 'reproductive endocrinology', 'reproductive endocrinologist',
-                    'reproductive endocrinology and infertility', 'infertility', 'fertility', 'fetal medicine', 'placenta', 'placental', 'pregnancy',
-                    'prenatal', 'peripartum', 'postpartum', 'labor and delivery', 'labor & delivery', 'labor/delivery', 'obstetric care', 'gynecologic oncology',
-                    'urogynecology', 'urogynecologic', 'urogynecology', 'minimally invasive gynecology', 'minimally invasive surgery', 'reproductive biology',
-                    'reproductive science', 'reproductive health', 'women\'s reproductive health', 'women\'s medicine', 'women\'s hospital', 'women\'s clinic',
-                    'obstetric medicine', 'gynecologic medicine', 'obstetric surgery', 'gynecologic surgery', 'obstetrician/gynecologist', 'obstetrician gynecologist',
-                    'obstetrician-gynecologist', 'obstetrician gynecologist', 'obstetrician', 'gynecologist', 'obstetricians', 'gynecologists', 'ob gyn', 'obgyn', 'ob-gyn',
-                ],
-                'obstetrics and gynecology': [
-                    'obstetrics', 'gynecology', 'ob/gyn', 'obstetrics and gynecology', 'maternal-fetal medicine', 'perinatology',
-                    'reproductive medicine', 'women\'s health', 'obstetric', 'gynecologic', 'obstetrician', 'gynecologist', 'obstetricians', 'gynecologists',
-                    'ob gyn', 'obgyn', 'ob-gyn', 'obstetrician-gynecologist', 'obstetrician gynecologist', 'obstetrics & gynecology', 'obstetrics & gynaecology',
-                    'gynaecology', 'maternal health', 'perinatal', 'perinatal medicine', 'reproductive endocrinology', 'reproductive endocrinologist',
-                    'reproductive endocrinology and infertility', 'infertility', 'fertility', 'fetal medicine', 'placenta', 'placental', 'pregnancy',
-                    'prenatal', 'peripartum', 'postpartum', 'labor and delivery', 'labor & delivery', 'labor/delivery', 'obstetric care', 'gynecologic oncology',
-                    'urogynecology', 'urogynecologic', 'urogynecology', 'minimally invasive gynecology', 'minimally invasive surgery', 'reproductive biology',
-                    'reproductive science', 'reproductive health', 'women\'s reproductive health', 'women\'s medicine', 'women\'s hospital', 'women\'s clinic',
-                    'obstetric medicine', 'gynecologic medicine', 'obstetric surgery', 'gynecologic surgery', 'obstetrician/gynecologist', 'obstetrician gynecologist',
-                    'obstetrician-gynecologist', 'obstetrician gynecologist',
-                ],
-                'neuroscience': ['neuroscience', 'neurological', 'brain', 'neural', 'cognitive', 'behavioral neuroscience'],
-                'computer science': ['computer', 'computational', 'algorithm', 'machine learning', 'artificial intelligence', 'software'],
-                'psychology': ['psychology', 'psychological', 'behavioral', 'cognitive psychology', 'social psychology'],
-                'mathematics': ['mathematics', 'mathematical', 'statistics', 'statistical', 'probability', 'algebra', 'calculus'],
-                'environmental science': ['environmental', 'ecology', 'climate', 'sustainability', 'ecosystem', 'conservation'],
-                'materials science': ['materials', 'nanomaterials', 'polymer', 'ceramic', 'metallurgy', 'composite'],
-                'geology': ['geology', 'geological', 'earth science', 'geophysics', 'mineralogy', 'petrology'],
-                'astronomy': ['astronomy', 'astrophysics', 'cosmology', 'planetary', 'stellar', 'galactic'],
-                'anthropology': ['anthropology', 'anthropological', 'archaeological', 'cultural', 'ethnographic'],
-                'sociology': ['sociology', 'sociological', 'social science', 'demography', 'criminology'],
-                'economics': ['economics', 'economic', 'econometrics', 'finance', 'business', 'market'],
-                'education': ['education', 'educational', 'pedagogy', 'curriculum', 'learning', 'teaching']
-            }
-            # If no department found, try external NLP API (placeholder)
-            if all(score == 0 for score in dept_scores.values()):
-                # Example: call_external_nlp_api(combined_text) and map result to department
-                pass  # You can implement this with OpenAI, HuggingFace, etc.
-
-            # Score each department
-            dept_scores = {}
-            for dept, keywords in dept_keywords.items():
-                score = 0
-                for keyword in keywords:
-                    if keyword in combined_text:
-                        # Weight longer phrases higher
-                        score += len(keyword.split()) * combined_text.count(keyword)
-                dept_scores[dept] = score
-
-            # Try to extract department from journal titles like 'Journal of ...'
-            import re
-            journal_dept_map = {
-                'biology': 'Biology',
-                'chemistry': 'Chemistry',
-                'physics': 'Physics',
-                'engineering': 'Engineering',
-                'medicine': 'Medicine',
-                'neuroscience': 'Neuroscience',
-                'computer science': 'Computer Science',
-                'psychology': 'Psychology',
-                'mathematics': 'Mathematics',
-                'environmental science': 'Environmental Science',
-                'materials science': 'Materials Science',
-                'geology': 'Geology',
-                'astronomy': 'Astronomy',
-                'anthropology': 'Anthropology',
-                'sociology': 'Sociology',
-                'economics': 'Economics',
-                'education': 'Education',
-                'immunology': 'Immunology',
-                'oncology': 'Oncology',
-                'cardiology': 'Cardiology',
-                'pharmacy': 'Pharmacy',
-                'biochemistry': 'Biochemistry',
-                'statistics': 'Statistics',
-                'biostatistics': 'Biostatistics',
-                'neurology': 'Neurology',
-                'internal medicine': 'Internal Medicine',
-                'pediatrics': 'Pediatrics',
-                'surgery': 'Surgery',
-                'cognitive science': 'Cognitive Science',
-                'computational biology': 'Computational Biology',
-            }
-            for jt in journal_titles:
-                m = re.search(r'journal of ([a-zA-Z &]+)', jt, re.IGNORECASE)
-                if m:
-                    possible = m.group(1).strip().lower()
-                    # Try direct match
-                    if possible in journal_dept_map:
-                        return journal_dept_map[possible]
-                    # Try partial match
-                    for key in journal_dept_map:
-                        if key in possible:
-                            return journal_dept_map[key]
-
-            # Find department with highest score
-            if dept_scores:
-                best_dept = max(dept_scores, key=dept_scores.get)
-                if dept_scores[best_dept] > 0:
-                    return best_dept.title()
-
+                    # Try DOI lookup
+                    for eid in summary.get('external-ids', {}).get('external-id', []):
+                        if eid.get('external-id-type','').lower() == 'doi':
+                            doi = eid.get('external-id-value')
+                            if doi:
+                                try:
+                                    meta = fetch_crossref_metadata(doi)
+                                    aff = find_pi_affiliation(meta, pi_name)
+                                    if aff:
+                                        affiliations.append(aff)
+                                    dept = extract_department(aff)
+                                    if dept and dept != 'Unknown':
+                                        return dept
+                                except Exception:
+                                    continue
+            
+            # If Crossref didn't work, use SciBERT on collected research text
+            if titles or abstracts or affiliations:
+                try:
+                    # Combine available text
+                    combined_titles = " ".join(titles[:5])  # Use first 5 titles
+                    combined_abstracts = " ".join(abstracts[:3])  # Use first 3 abstracts
+                    combined_affiliations = " ".join(affiliations[:3])  # Use first 3 affiliations
+                    
+                    # Use SciBERT classifier
+                    scibert_result = predict_from_research_context(
+                        title=combined_titles,
+                        abstract=combined_abstracts,
+                        affiliation=combined_affiliations
+                    )
+                    
+                    if (scibert_result['department'] != 'Unknown' and 
+                        scibert_result['confidence'] > 0.4):  # Higher threshold for works analysis
+                        with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                            debug_log.write(f"[DEBUG] SciBERT found department: {scibert_result['department']} (confidence: {scibert_result['confidence']:.3f})\n")
+                        return scibert_result['department']
+                
+                except Exception as e:
+                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                        debug_log.write(f"[DEBUG] SciBERT analysis error: {e}\n")
+            
             return None
-
         except Exception as e:
-            with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
-                debug_log.write(f"Error analyzing works for department: {e}\n")
+            # Log exception if needed
             return None
 
 class DepartmentNormalizer:
@@ -494,6 +443,75 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
             }
     except Exception as e:
         print(f"Error in ORCID lookup for {name}: {e}")
+    
+    # Fallback: Try SciBERT on available text with research context
+    try:
+        # Collect any research-related text for better classification
+        research_context = []
+        
+        # Add PI name for potential field inference
+        if name:
+            research_context.append(name)
+        
+        # Add institution for field specialization hints
+        if institution != "Unknown":
+            research_context.append(institution)
+        
+        # Use name and institution as basic research context
+        text_for_classification = " ".join(research_context)
+        
+        if len(text_for_classification.strip()) > 10:  # Ensure we have meaningful text
+            scibert_result = predict_department_scibert(text_for_classification)
+            
+            if (scibert_result['department'] != 'Unknown' and 
+                scibert_result['confidence'] > 0.25):  # Lower threshold for fallback
+                
+                normalized_dept = DepartmentNormalizer.normalize(scibert_result['department'])
+                
+                # Cache result
+                _cache.set(name, institution, normalized_dept, 'scibert', 'medium')
+                
+                return {
+                    'department': normalized_dept,
+                    'source': 'scibert',
+                    'confidence': 'medium'
+                }
+    except Exception as e:
+        print(f"Error in SciBERT lookup for {name}: {e}")
+    
+    # Final fallback: Try institution-based heuristics
+    try:
+        if institution != "Unknown":
+            institution_lower = institution.lower()
+            
+            # Institution type heuristics
+            institution_hints = {
+                'medical center': 'Medicine',
+                'cancer center': 'Medicine', 
+                'hospital': 'Medicine',
+                'medical college': 'Medicine',
+                'school of medicine': 'Medicine',
+                'health sciences': 'Medicine',
+                'tech': 'Engineering',
+                'institute of technology': 'Engineering',
+                'agricultural': 'Biology',
+                'marine': 'Biology',
+                'astronomical': 'Physics',
+                'observatory': 'Physics',
+            }
+            
+            for hint, dept in institution_hints.items():
+                if hint in institution_lower:
+                    normalized_dept = DepartmentNormalizer.normalize(dept)
+                    _cache.set(name, institution, normalized_dept, 'institution_heuristic', 'low')
+                    
+                    return {
+                        'department': normalized_dept,
+                        'source': 'institution_heuristic', 
+                        'confidence': 'low'
+                    }
+    except Exception as e:
+        print(f"Error in institution heuristics for {name}: {e}")
     
     # If all lookups fail
     result = {

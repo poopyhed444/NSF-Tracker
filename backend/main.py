@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 import json
 from collections import defaultdict
 from pi_department_lookup import get_pi_department
+from scibert_classifier import predict_department_scibert, train_classifier
 
 app = FastAPI(title="NIH/NSF At-Risk Labs Tracker", version="1.0.0")
 
@@ -259,6 +260,36 @@ async def get_risk_leaderboard():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/test-scibert")
+async def test_scibert_classifier(text: str):
+    """
+    Test endpoint for SciBERT department classification.
+    Usage: /api/test-scibert?text=protein folding molecular dynamics
+    """
+    try:
+        result = predict_department_scibert(text)
+        return {
+            "input_text": text,
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in SciBERT classification: {str(e)}")
+
+@app.get("/api/train-classifier")
+async def train_scibert_classifier(force_retrain: bool = False):
+    """
+    Train or retrain the SciBERT classifier.
+    Usage: /api/train-classifier?force_retrain=true
+    """
+    try:
+        train_classifier(force_retrain=force_retrain)
+        return {
+            "status": "success",
+            "message": "Classifier training completed"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error training classifier: {str(e)}")
 
 @app.get("/api/test-pi-lookup")
 async def test_pi_lookup(name: str, institution: str):

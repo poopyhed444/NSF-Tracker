@@ -3,672 +3,1212 @@
     "department": "Biology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:58:51.363930"
+    "timestamp": "2025-07-19T23:27:32.687009"
   },
   "aagaard, kjersti marie|baylor college of medicine": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:51.675361"
+    "timestamp": "2025-07-19T23:28:25.014335"
   },
   "aalamifar, fereshteh|pediametrix inc.": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:52.072728"
+    "timestamp": "2025-07-19T23:28:25.421843"
   },
   "aalsma, matthew|indiana university indianapolis": {
     "department": "Medicine",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:58:52.659427"
+    "timestamp": "2025-07-19T23:28:25.841748"
   },
   "aarons, gregory|university of california, san diego": {
     "department": "Psychiatry",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:58:53.270863"
+    "timestamp": "2025-07-19T23:28:26.241533"
   },
   "abaci turk, esra|boston children's hospital": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-18T01:58:53.510154"
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:28:26.476703"
   },
   "aballo, timothy|university of wisconsin-madison": {
     "department": "Molecular And Cellular Pharmacology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:58:53.965080"
+    "timestamp": "2025-07-19T23:28:26.860774"
   },
   "abas, melanie amna|king's college london": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:54.260445"
+    "timestamp": "2025-07-19T23:28:27.115698"
   },
   "abate-daga, daniel|h. lee moffitt cancer ctr & res inst": {
     "department": "Immunology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:58:55.314881"
+    "timestamp": "2025-07-19T23:28:27.881320"
   },
   "abate-shen, cory|columbia university health sciences": {
     "department": "Biology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:58:56.543048"
+    "timestamp": "2025-07-19T23:28:28.798229"
   },
   "abazeed, mohamed e.|northwestern university at chicago": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:56.787025"
+    "timestamp": "2025-07-19T23:28:29.047100"
   },
   "abbas, james j.|university of arkansas at fayetteville": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:57.030412"
+    "timestamp": "2025-07-19T23:28:29.306306"
   },
   "abbas, tarek a.|university of virginia": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:57.266764"
+    "timestamp": "2025-07-19T23:28:29.498643"
   },
   "abbasi, adeel|ocean state research institute, inc.": {
-    "department": "Biology",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:58:57.998054"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:28:32.574911"
   },
   "abbasov, mikail e|cornell university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:58.234780"
+    "timestamp": "2025-07-19T23:28:32.836482"
   },
   "abbate, antonio|virginia commonwealth university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:59.479203"
+    "timestamp": "2025-07-19T23:28:34.244839"
   },
   "abbeduto, leonard j.|university of california at davis": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:59.711990"
+    "timestamp": "2025-07-19T23:28:34.499569"
   },
   "abbondanzieri, elio aaron|university of rochester": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:58:59.959610"
+    "timestamp": "2025-07-19T23:28:34.755298"
   },
   "abbott, derek w|case western reserve university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:00.324117"
+    "timestamp": "2025-07-19T23:28:34.943633"
   },
   "abbott, geoffrey w|university of california-irvine": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:00.571785"
+    "timestamp": "2025-07-19T23:28:35.199424"
   },
   "abbott, laurence f.|columbia university health sciences": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:00.821597"
+    "timestamp": "2025-07-19T23:28:35.458614"
   },
   "abbott, madeline|university of michigan at ann arbor": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:01.269685"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:28:36.476105"
   },
   "abbott, michael|california state dept/food/agriculture": {
     "department": "Biology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:02.137998"
+    "timestamp": "2025-07-19T23:28:37.205650"
   },
   "abbott, noelle|san diego state university": {
-    "department": "Neuroscience",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:02.450326"
-  },
-  "abbott, stephen|university of virginia": {
-    "department": "Neuroscience",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:04.258660"
-  },
-  "abboud, sarah|university of illinois at chicago": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:04.946275"
-  },
-  "abbruscato, thomas j|texas tech university health scis center": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:05.176190"
+    "timestamp": "2025-07-19T23:28:39.062127"
+  },
+  "abbott, stephen|university of virginia": {
+    "department": "Geology",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:28:46.385539"
+  },
+  "abboud, sarah|university of illinois at chicago": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:28:53.771775"
+  },
+  "abbruscato, thomas j|texas tech university health scis center": {
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:28:54.056708"
   },
   "abbruzzese, james l.|duke university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:05.523242"
+    "timestamp": "2025-07-19T23:28:54.246778"
   },
   "abcouwer, steven f|university of michigan at ann arbor": {
     "department": "Medicine",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:06.180038"
+    "timestamp": "2025-07-19T23:28:54.630572"
   },
   "abdalla, marwah|columbia university health sciences": {
-    "department": "Cardiology",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:06.493150"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:28:56.505881"
   },
   "abdel mohsen, mohamed|wistar institute": {
     "department": "Chemistry",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:06.913202"
+    "timestamp": "2025-07-19T23:28:56.857273"
   },
   "abdel-kader, khaled a|vanderbilt university medical center": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:07.134496"
+    "timestamp": "2025-07-19T23:28:57.118422"
   },
   "abdel-rahman, abdel a|east carolina university": {
     "department": "Animal Production",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:07.636288"
+    "timestamp": "2025-07-19T23:28:57.652672"
   },
   "abdel-wahab, omar|sloan-kettering inst can research": {
-    "department": "Medicine",
+    "department": "Toxicology And Narcotics",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:08.558337"
+    "timestamp": "2025-07-19T23:29:27.882517"
   },
   "abdelaal, karim|duke university": {
-    "department": "Neuroscience",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:09.117737"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:29:28.854734"
   },
   "abdelazim, hanaa|virginia polytechnic inst and st univ": {
     "department": "Biology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:09.483367"
+    "timestamp": "2025-07-19T23:29:29.109458"
   },
   "abdelfattah, ahmed|brown university": {
     "department": "Painting",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:10.253292"
+    "timestamp": "2025-07-19T23:29:29.537151"
   },
   "abdellatif, maha|rutgers biomedical and health sciences": {
-    "department": "Chemistry",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:10.662688"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:29:31.534720"
   },
   "abdi, reza|brigham and women's hospital": {
-    "department": "Environmental Science",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:12.724211"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:29:43.400390"
   },
   "abdullah, laila|james a. haley va medical center": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:13.078695"
+    "timestamp": "2025-07-19T23:29:43.886447"
   },
   "abdullah, saeed|pennsylvania state university, the": {
     "department": "Information Sciences And Technology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:13.691628"
+    "timestamp": "2025-07-19T23:29:44.324744"
   },
   "abe, jun-ichi|university of tx md anderson can ctr": {
-    "department": "Biology",
+    "department": "Faculty Of Life And Environmental Sciences",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:14.987578"
+    "timestamp": "2025-07-19T23:29:46.589551"
   },
   "abebayehu, daniel|university of virginia": {
     "department": "Biomedical Engineering",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:15.353459"
+    "timestamp": "2025-07-19T23:29:47.024897"
   },
   "abel, alyson davis|san diego state university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:15.550529"
+    "timestamp": "2025-07-19T23:29:47.298591"
   },
   "abel, e dale|endocrine society": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:15.716396"
+    "timestamp": "2025-07-19T23:29:47.566241"
   },
   "abel, edwin ted g.|university of iowa": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:15.932279"
+    "timestamp": "2025-07-19T23:29:47.821420"
   },
   "abell, thomas lyman|university of louisville": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:16.093392"
+    "timestamp": "2025-07-19T23:29:48.014595"
   },
   "abernathy, shawn maurice|howard university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:16.295152"
+    "timestamp": "2025-07-19T23:29:48.221140"
   },
   "abhyankar, vinay v|rochester institute of technology": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:16.474723"
+    "timestamp": "2025-07-19T23:29:48.409451"
   },
   "abi-dargham, anissa|state university new york stony brook": {
     "department": "Psychiatry",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:16.855016"
+    "timestamp": "2025-07-19T23:29:48.759397"
   },
   "abiff, muta|case western reserve university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:17.165449"
+    "timestamp": "2025-07-19T23:29:49.035868"
   },
   "abimiku, alash'le g.|institute of human virology": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:17.421037"
+    "timestamp": "2025-07-19T23:29:49.282073"
   },
   "abisambra, jose francisco|university of florida": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:17.588912"
+    "timestamp": "2025-07-19T23:29:49.470726"
   },
   "abitbol, carolyn larkins|university of miami school of medicine": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:17.769239"
+    "timestamp": "2025-07-19T23:29:49.678476"
   },
   "abkowitz, janis l|university of washington": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:18.039652"
+    "timestamp": "2025-07-19T23:29:49.851781"
   },
   "ables, elizabeth tweedie|east carolina university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:18.297653"
+    "timestamp": "2025-07-19T23:29:50.130349"
   },
   "ablordeppey, enyo|washington university": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:18.716066"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:29:53.385625"
   },
   "ablordeppey, seth y|florida agricultural and mechanical univ": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:18.951324"
+    "timestamp": "2025-07-19T23:29:53.640671"
   },
   "abosch, aviva|university of nebraska medical center": {
-    "department": "Neuroscience",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:19.443438"
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:29:54.330395"
   },
   "abou donia, mohamed|princeton university": {
     "department": "Plant Pathology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:21.078485"
+    "timestamp": "2025-07-19T23:29:56.206789"
   },
   "aboualaiwi, wissam|university of toledo health sci campus": {
-    "department": "Neuroscience",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:21.410152"
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:29:57.542732"
   },
   "aboudehen, karam|state university new york stony brook": {
     "department": "Medicine",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:21.792791"
+    "timestamp": "2025-07-19T23:29:57.829771"
   },
   "abraham, evelyn|pennsylvania state university, the": {
     "department": "Biology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:22.079341"
+    "timestamp": "2025-07-19T23:29:58.099760"
   },
   "abraham, soman n|duke university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:22.349699"
+    "timestamp": "2025-07-19T23:29:58.304758"
   },
   "abraham, william tober|ohio state university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:22.590991"
+    "timestamp": "2025-07-19T23:29:58.486332"
   },
   "abrahams, melissa-rose|university of cape town": {
     "department": "Research Office",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:23.584805"
+    "timestamp": "2025-07-19T23:29:58.930459"
   },
   "abrahamsson, dimitri|new york university school of medicine": {
-    "department": "Engineering",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:24.572445"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:30:02.440474"
   },
   "abraira, victoria eugenia guadalupe|rutgers, the state univ of n.j.": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:24.790077"
+    "timestamp": "2025-07-19T23:30:02.655039"
   },
   "abramov, debra|weill medical coll of cornell univ": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:25.193019"
+    "timestamp": "2025-07-19T23:30:03.025498"
   },
   "abramov, vasiliy|creosalus, inc.": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:25.402049"
+    "timestamp": "2025-07-19T23:30:03.365706"
   },
   "abramowitz, jonathan s.|univ of north carolina chapel hill": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:25.610235"
+    "timestamp": "2025-07-19T23:30:03.586927"
   },
   "abrams, cameron f|drexel university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:25.848774"
+    "timestamp": "2025-07-19T23:30:03.786025"
   },
   "abrams, charles s.|university of pennsylvania": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:26.151926"
+    "timestamp": "2025-07-19T23:30:03.993787"
   },
   "abrams, daniel m|northwestern university": {
     "department": "Engineering",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:26.989421"
+    "timestamp": "2025-07-19T23:30:05.032185"
   },
   "abrams, elaine janine|columbia university health sciences": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:27.380945"
+    "timestamp": "2025-07-19T23:30:05.230468"
   },
   "abrams, john m|ut southwestern medical center": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:27.608168"
+    "timestamp": "2025-07-19T23:30:05.468797"
   },
   "abrams, julian|columbia university health sciences": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:28.169347"
+    "timestamp": "2025-07-19T23:30:14.709666"
   },
   "abramson, david m|new york university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:28.437585"
+    "timestamp": "2025-07-19T23:30:14.977196"
   },
   "abramson, jeffrey s|university of california los angeles": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:28.689628"
+    "timestamp": "2025-07-19T23:30:15.260274"
   },
   "abranches, jacqueline|university of florida": {
     "department": "Biology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:29.520091"
+    "timestamp": "2025-07-19T23:30:16.111704"
   },
   "abrantes, ana m|butler hospital (providence, ri)": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:29.690294"
+    "timestamp": "2025-07-19T23:30:16.395418"
   },
   "abreu, clare isabel|stanford university": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:29.927675"
+    "timestamp": "2025-07-19T23:30:16.671848"
   },
   "abu jawdeh, elie g|university of kentucky": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:30.130421"
+    "timestamp": "2025-07-19T23:30:16.974022"
   },
   "abu kwaik, yousef a|university of louisville": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:30.381318"
+    "timestamp": "2025-07-19T23:30:17.271666"
   },
   "abu, yaa|university of miami school of medicine": {
     "department": "Medical Scientist Training Program",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:30.780240"
+    "timestamp": "2025-07-19T23:30:17.850790"
   },
   "abu-amer, yousef|washington university": {
-    "department": "Medicine",
+    "department": "Engineering",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:31.729457"
+    "timestamp": "2025-07-19T23:30:24.443635"
   },
   "abu-ba'are, gamji rabiu|university of rochester": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:31.971897"
+    "timestamp": "2025-07-19T23:30:24.744416"
   },
   "abu-el-haija, maisam|cincinnati childrens hosp med ctr": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:32.256779"
+    "timestamp": "2025-07-19T23:30:25.198293"
   },
   "abu-lail, nehal ibrahim|university of texas san antonio": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:32.494026"
+    "timestamp": "2025-07-19T23:30:25.482767"
   },
   "abu-remaileh, monther|stanford university": {
     "department": "Engineering",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:33.422643"
+    "timestamp": "2025-07-19T23:30:26.606792"
   },
   "abudayyeh, omar o|brigham and women's hospital": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:33.657559"
+    "timestamp": "2025-07-19T23:30:26.981435"
   },
   "abudayyeh, omar o|massachusetts institute of technology": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:33.954301"
+    "timestamp": "2025-07-19T23:30:26.888671"
   },
   "abuelezam, nadia natasha|boston college": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:34.253178"
+    "timestamp": "2025-07-19T23:30:27.292968"
   },
   "abuhashem, abderhman anees|weill medical coll of cornell univ": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-18T01:59:34.493664"
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:30:27.568549"
   },
   "abujarad, fuad|yale university": {
     "department": "Medicine",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:34.846668"
+    "timestamp": "2025-07-19T23:30:27.988388"
   },
   "abushakra, susan|alzheon, inc.": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-18T01:59:35.166871"
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:30:28.591722"
   },
   "abyzov, alexej|mayo clinic rochester": {
     "department": "Quantitative Health Sciences",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:36.477399"
+    "timestamp": "2025-07-19T23:30:30.286031"
   },
   "acar, handan|university of oklahoma": {
     "department": "Engineering",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:37.018109"
+    "timestamp": "2025-07-19T23:30:30.920798"
   },
   "acaron, hector|boston children's hospital": {
     "department": "Neurology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:37.314707"
+    "timestamp": "2025-07-19T23:30:31.371114"
   },
   "accili, domenico|columbia university health sciences": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:37.660517"
+    "timestamp": "2025-07-19T23:30:31.892254"
   },
   "accornero, federica|ohio state university": {
-    "department": "Cardiology",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:38.352344"
-  },
-  "accortt, eynav elgavish|cedars-sinai medical center": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:38.584050"
+    "timestamp": "2025-07-19T23:30:38.536776"
+  },
+  "accortt, eynav elgavish|cedars-sinai medical center": {
+    "department": "Biology",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:30:38.816891"
   },
   "accurso, erin cecilia|university of california, san francisco": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:38.766851"
-  },
-  "acero bedoya, santiago|university of chicago": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:39.424502"
+    "timestamp": "2025-07-19T23:30:39.121742"
   },
   "acero bedoya, santiago|new york genome center": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:39.777531"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:30:41.812794"
+  },
+  "acero bedoya, santiago|university of chicago": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:30:44.570857"
   },
   "aceves, seema s|university of california, san diego": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:39.978394"
+    "timestamp": "2025-07-19T23:30:44.188469"
   },
   "achanta, satyanarayana|duke university": {
     "department": "Anethesiology",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:40.587924"
+    "timestamp": "2025-07-19T23:30:44.978440"
   },
   "acharya, mridu|seattle children's hospital": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:41.391273"
+    "timestamp": "2025-07-19T23:30:45.663867"
   },
   "acharya, priyamvada|duke university": {
     "department": "Surgery",
     "source": "orcid",
     "confidence": "high",
-    "timestamp": "2025-07-18T01:59:42.631510"
+    "timestamp": "2025-07-19T23:30:46.867155"
   },
   "acharya, suchismita|ayuvis research, inc.": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:43.027245"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:30:49.021636"
   },
   "acharya, yubraj|pennsylvania state university, the": {
-    "department": "Medicine",
-    "source": "orcid",
-    "confidence": "high",
-    "timestamp": "2025-07-18T01:59:43.592694"
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:31:00.233735"
   },
   "acharyya, swarnali|columbia university health sciences": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-18T01:59:44.464287"
+    "timestamp": "2025-07-19T23:31:01.074392"
+  },
+  "acheampong, edward|new jersey state dept/health/senior srvs": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:31:07.673713"
+  },
+  "achilefu, samuel|ut southwestern medical center": {
+    "department": "Biomedical Engineering",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:31:09.628600"
+  },
+  "achkar, jacqueline michele|albert einstein college of medicine": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:31:09.897098"
+  },
+  "ackenbom, mary|magee-women's res inst and foundation": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:31:10.390516"
+  },
+  "john smith|mit": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:36:16.228683"
+  },
+  "acker, corey|potentiometric probes, llc": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:07.926922"
+  },
+  "acker, leah|duke university": {
+    "department": "Anesthesiology",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:08.319898"
+  },
+  "ackerman, a. lenore|university of california los angeles": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:08.576338"
+  },
+  "ackerman, a. lenore|cedars-sinai medical center": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:08.829926"
+  },
+  "ackerman, jerome l|massachusetts general hospital": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:09.073114"
+  },
+  "ackerman, margaret e|dartmouth college": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:09.323499"
+  },
+  "ackerman, sarah d|washington university": {
+    "department": "Pathology And Immunology, Center For Brain Immunology And Glia",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:09.656766"
+  },
+  "ackermann, mark r|oregon state university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:09.963289"
+  },
+  "ackermann, ronald t.|northwestern university at chicago": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:10.258736"
+  },
+  "ackert-bicknell, cheryl lynne|university of colorado denver": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:10.552077"
+  },
+  "ackley, brian douglas|university of kansas lawrence": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:10.818969"
+  },
+  "ackun-farmmer, marian adriana|univ of maryland, college park": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:11.102987"
+  },
+  "acolin, arthur|university of washington": {
+    "department": "Real Estate",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:11.671896"
+  },
+  "acosta, ana maria|northwestern university at chicago": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:12.106398"
+  },
+  "acosta, francisca maria|university of texas hlth science center": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:12.386763"
+  },
+  "acosta, victor marcel|university of new mexico": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:12.709790"
+  },
+  "acosta-perez, edna|university of puerto rico med sciences": {
+    "department": "Graduate School Of Public Health",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:13.507152"
+  },
+  "acott, ted s|oregon health & science university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:13.694204"
+  },
+  "acton, emily kate|university of pennsylvania": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:13.887233"
+  },
+  "acunzo, mario|virginia commonwealth university": {
+    "department": "Department Of Molecular Virology, Immunology And Medical Genetics",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:14.712013"
+  },
+  "adair, bernadette mcmahon|keystone nano, inc.": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:14.997362"
+  },
+  "adair, jennifer eileen|fred hutchinson cancer center": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:15.262434"
+  },
+  "adair, john chalmers|university of new mexico health scis ctr": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:15.525599"
+  },
+  "adaku, nneoma|weill medical coll of cornell univ": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:18.517287"
+  },
+  "adamczyk, natalie|rush university medical center": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:19.087627"
+  },
+  "adamkiewicz, gary|harvard university d/b/a harvard school of public health": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:29.954512"
+  },
+  "adamo, andrea|zaiput flow technologies llc": {
+    "department": "Engineering",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:30.906156"
+  },
+  "adamo, luigi|johns hopkins university": {
+    "department": "Medicine",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:31.385011"
+  },
+  "adamo, stephen|university of central florida": {
+    "department": "Medical Imaging",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:32.092896"
+  },
+  "adamopoulos, iannis elias|university of california at davis": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:32.319661"
+  },
+  "adamopoulos, iannis elias|beth israel deaconess medical center": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:32.577609"
+  },
+  "adams larsen, margo|virtually better, inc.": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:34.037488"
+  },
+  "adams waldorf, kristina m.|university of washington": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:34.307143"
+  },
+  "adams, alexandra k.|montana state university - bozeman": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:34.579924"
+  },
+  "adams, alyce sophia|stanford university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:34.838070"
+  },
+  "adams, andrew b|university of minnesota": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:35.081075"
+  },
+  "adams, carlton|northwestern university at chicago": {
+    "department": "Department Of Music Theory",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:35.561900"
+  },
+  "adams, david c|massachusetts general hospital": {
+    "department": "Medicine",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:41:35.801504"
+  },
+  "adams, drew james|case western reserve university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:36.048643"
+  },
+  "adams, elizabeth|university of south carolina at columbia": {
+    "department": "Psychology",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:36.269661"
+  },
+  "adams, erin june|university of chicago": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:36.460777"
+  },
+  "adams, james b|fred hutchinson cancer center": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:36.753809"
+  },
+  "adams, jenna nicole|university of california-irvine": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:36.969842"
+  },
+  "adams, joseph|university of california, san diego": {
+    "department": "Pharmacology",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:38.453274"
+  },
+  "adams, leslie bernice|johns hopkins university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:38.639999"
+  },
+  "adams, lisa virginia|dartmouth college": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:38.847436"
+  },
+  "adams, mark d|jackson laboratory": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:39.047018"
+  },
+  "adams, michael w.|university of georgia": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:39.307526"
+  },
+  "adams, paul david|university of california berkeley": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:39.505542"
+  },
+  "adams, peter d.|sanford burnham prebys medical discovery institute": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:39.764062"
+  },
+  "adams, richard c.|ut southwestern medical center": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:40.026510"
+  },
+  "adams, richard j.|barron associates, inc.": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:40.237590"
+  },
+  "adams, robert j|medical university of south carolina": {
+    "department": "Medicine",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:41:40.487145"
+  },
+  "adams, walter isaiah|san jose state university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:40.675787"
+  },
+  "adams-campbell, lucile lauren|georgetown university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:40.933319"
+  },
+  "adams-phillips, lori c|university of iowa": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:41.134986"
+  },
+  "adamson, peter c.|children's hosp of philadelphia": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:41.407383"
+  },
+  "adamson, stuart st john|harvard university d/b/a harvard school of public health": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:41.671784"
+  },
+  "adang, laura ann|children's hosp of philadelphia": {
+    "department": "Medicine",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:41:41.923163"
+  },
+  "adawe, amira|the beautywell project": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:42.169449"
+  },
+  "addicott, merideth a.|wake forest university health sciences": {
+    "department": "Medicine",
+    "source": "institution_heuristic",
+    "confidence": "low",
+    "timestamp": "2025-07-19T23:41:42.385109"
+  },
+  "addison, helena|university of pennsylvania": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:43.667592"
+  },
+  "addison, odessa|baltimore va medical center": {
+    "department": "Medicine",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:41:47.988985"
+  },
+  "adebamowo, clement adebayo|university of maryland baltimore": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:48.299914"
+  },
+  "adebiyi, adebowale|university of tennessee health sci ctr": {
+    "department": "Vaccine And Infectious Disease Organization (Vido)",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:48.822993"
+  },
+  "adebiyi, adebowale|university of missouri-columbia": {
+    "department": "Vaccine And Infectious Disease Organization (Vido)",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:41:49.284392"
+  },
+  "adebowale, kolade|harvard university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:50.716619"
+  },
+  "adedimeji, adebola|albert einstein college of medicine": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:41:51.101291"
+  },
+  "adegunsoye, ayodeji|university of chicago": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:02.335243"
+  },
+  "adejumo, hollie adeola|university of michigan at ann arbor": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:02.550807"
+  },
+  "adelman, karen l|harvard medical school": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:02.827120"
+  },
+  "adelman, zach n.|texas a&m university health science ctr": {
+    "department": "Medicine",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:42:03.044187"
+  },
+  "adelman, zach n.|texas a&m agrilife research": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:03.246087"
+  },
+  "adelus, maria|university of arizona": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:04.334424"
+  },
+  "aden, brandon|weill medical coll of cornell univ": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:04.765133"
+  },
+  "adeoye, opeolu m|washington university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:04.972751"
+  },
+  "adepoju, omolola e|university of houston": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:05.166326"
+  },
+  "ades, philip a.|university of vermont & st agric college": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:05.437721"
+  },
+  "adewale, adegboyega timothy|medical university of south carolina": {
+    "department": "Medicine",
+    "source": "scibert",
+    "confidence": "medium",
+    "timestamp": "2025-07-19T23:42:05.742388"
+  },
+  "adey, andrew|oregon health & science university": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:07.301184"
+  },
+  "adgate, john l.|university of colorado denver": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:07.514921"
+  },
+  "adhia, avanti b|university of washington": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:07.772044"
+  },
+  "adhikari, avishek|university of california los angeles": {
+    "department": "Mathematics",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:42:08.008740"
+  },
+  "adhikari, srikar reddy|university of arizona": {
+    "department": "Unknown",
+    "source": "none",
+    "confidence": "none",
+    "timestamp": "2025-07-19T23:42:08.216349"
+  },
+  "adhikary, sweta|oregon health & science university": {
+    "department": "Vollum Institute",
+    "source": "orcid",
+    "confidence": "high",
+    "timestamp": "2025-07-19T23:42:08.693147"
   }
 }
