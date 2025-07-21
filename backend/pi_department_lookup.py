@@ -119,6 +119,9 @@ class ORCIDLookup:
         Search for PI in ORCID and extract department.
         Returns (department, confidence) tuple or None.
         """
+        with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+            debug_log.write(f"[DEBUG] Starting ORCID search for '{name}' at '{institution}'\n")
+        
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 # Parse name for ORCID search
@@ -159,7 +162,14 @@ class ORCIDLookup:
                 with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
                     debug_log.write(f"[DEBUG] ORCID search_data: {search_data}\n")
 
-                for result in search_data.get('result', []):
+                # Handle case where ORCID API returns None for result instead of empty list
+                results = search_data.get('result', [])
+                if results is None:
+                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                        debug_log.write(f"[DEBUG] ORCID API returned None for results, treating as empty.\n")
+                    return None
+
+                for result in results:
                     orcid_id = result.get('orcid-identifier', {}).get('path')
                     if not orcid_id:
                         continue
@@ -256,82 +266,237 @@ class ORCIDLookup:
             print(f"Error extracting department from ORCID record: {e}")
             return None
 
-    @staticmethod
+    @staticmethod 
     def _analyze_works_for_department(activities: Dict, pi_name: str) -> Optional[str]:
-        """Analyze ORCID works/publications to guess department using Crossref affiliations and SciBERT."""
+        """Enhanced analysis of ORCID works/publications to guess department using research content."""
         try:
-            works = activities.get('works', {}).get('group', [])
+            works = activities.get('works', {})
+            if works is None:
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write(f"[DEBUG] Works is None for {pi_name}\n")
+                return None
             
-            # Collect research text for SciBERT analysis
+            work_groups = works.get('group', [])
+            if work_groups is None:
+                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                    debug_log.write(f"[DEBUG] Work groups is None for {pi_name}\n")
+                return None
+                
+            with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                debug_log.write(f"[DEBUG] Analyzing {len(work_groups)} work groups for {pi_name}\n")
+            
+            # Collect comprehensive research content
             titles = []
             abstracts = []
             affiliations = []
+            journal_names = []
+            keywords = []
             
-            # First try Crossref API lookup via DOI
-            for group in works:
-                for summary in group.get('work-summary', []):
-                    # Collect title for SciBERT
-                    title = summary.get('title', {}).get('title', {}).get('value', '')
-                    if title:
-                        titles.append(title)
+            # First try Crossref API lookup via DOI for detailed metadata
+            for group in work_groups:
+                if group is None:
+                    continue
+                work_summaries = group.get('work-summary', [])
+                if work_summaries is None:
+                    continue
                     
-                    # Try DOI lookup
-                    for eid in summary.get('external-ids', {}).get('external-id', []):
-                        if eid.get('external-id-type','').lower() == 'doi':
-                            doi = eid.get('external-id-value')
-                            if doi:
-                                try:
-                                    meta = fetch_crossref_metadata(doi)
-                                    aff = find_pi_affiliation(meta, pi_name)
-                                    if aff:
-                                        affiliations.append(aff)
-                                    dept = extract_department(aff)
-                                    if dept and dept != 'Unknown':
-                                        return dept
-                                except Exception:
-                                    continue
+                for summary in work_summaries:
+                    if summary is None:
+                        continue
+                        
+                    # Collect title for analysis
+                    try:
+                        title_data = summary.get('title')
+                        if title_data is not None:
+                            title_inner = title_data.get('title')
+                            if title_inner is not None:
+                                title = title_inner.get('value', '')
+                                if title:
+                                    titles.append(title.strip())
+                                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                                        debug_log.write(f"[DEBUG] Found title: {title.strip()}\n")
+                    except Exception as e:
+                        with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                            debug_log.write(f"[DEBUG] Error extracting title: {e}\n")
+                    
+                    # Collect journal name for field inference
+                    try:
+                        journal_data = summary.get('journal-title')
+                        if journal_data is not None:
+                            journal_title = journal_data.get('value', '')
+                            if journal_title:
+                                journal_names.append(journal_title.strip())
+                                with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                                    debug_log.write(f"[DEBUG] Found journal: {journal_title.strip()}\n")
+                    except Exception as e:
+                        with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                            debug_log.write(f"[DEBUG] Error extracting journal: {e}\n")
+                    
+                    # Try DOI lookup for detailed metadata - skip this for now to isolate the issue
+                    # We'll process this after we confirm basic extraction works
             
-            # If Crossref didn't work, use SciBERT on collected research text
-            if titles or abstracts or affiliations:
+            with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                debug_log.write(f"[DEBUG] Collected {len(titles)} titles, {len(journal_names)} journals\n")
+                if journal_names:
+                    debug_log.write(f"[DEBUG] Sample journals: {journal_names[:5]}\n")
+            
+            # Enhanced SciBERT analysis with comprehensive research context
+            if titles or abstracts or affiliations or journal_names:
                 try:
-                    # Combine available text
-                    combined_titles = " ".join(titles[:5])  # Use first 5 titles
-                    combined_abstracts = " ".join(abstracts[:3])  # Use first 3 abstracts
-                    combined_affiliations = " ".join(affiliations[:3])  # Use first 3 affiliations
+                    # Create comprehensive research profile
                     
-                    # Use SciBERT classifier
+                    # Combine titles (limit to avoid too much noise)
+                    title_text = " ".join(titles[:10])  # Use first 10 titles
+                    
+                    # Combine abstracts 
+                    abstract_text = " ".join(abstracts[:5])  # Use first 5 abstracts
+                    
+                    # Combine affiliations
+                    affiliation_text = " ".join(affiliations[:5])
+                    
+                    # Analyze journal names for field hints
+                    journal_hints = []
+                    for journal in journal_names[:10]:  # Check first 10 journals
+                        journal_lower = journal.lower()
+                        
+                        # Medical journal patterns
+                        if any(word in journal_lower for word in [
+                            'obstetrics', 'gynecology', 'maternal', 'fetal', 'pregnancy',
+                            'reproductive', 'contraception', 'perinatal'
+                        ]):
+                            journal_hints.append('obstetrics gynecology reproductive medicine')
+                        elif any(word in journal_lower for word in [
+                            'pediatr', 'child', 'adolescent', 'neonatal', 'infant'
+                        ]):
+                            journal_hints.append('pediatrics child health development')
+                        elif any(word in journal_lower for word in [
+                            'cardio', 'heart', 'cardiac', 'cardiovascular', 'coronary'
+                        ]):
+                            journal_hints.append('cardiology heart disease cardiovascular')
+                        elif any(word in journal_lower for word in [
+                            'cancer', 'oncol', 'tumor', 'malignancy', 'chemotherapy'
+                        ]):
+                            journal_hints.append('oncology cancer treatment')
+                        elif any(word in journal_lower for word in [
+                            'dermat', 'skin', 'melanoma', 'psoriasis'
+                        ]):
+                            journal_hints.append('dermatology skin disease')
+                        elif any(word in journal_lower for word in [
+                            'psych', 'mental health', 'depression', 'anxiety'
+                        ]):
+                            journal_hints.append('psychiatry mental health')
+                        elif any(word in journal_lower for word in [
+                            'neurol', 'brain', 'stroke', 'epilepsy', 'alzheimer'
+                        ]):
+                            journal_hints.append('neurology brain disorders')
+                        elif any(word in journal_lower for word in [
+                            'anesth', 'pain', 'analgesia'
+                        ]):
+                            journal_hints.append('anesthesiology pain management')
+                        elif any(word in journal_lower for word in [
+                            'radiol', 'imaging', 'mri', 'ct scan'
+                        ]):
+                            journal_hints.append('radiology medical imaging')
+                        elif any(word in journal_lower for word in [
+                            'pathol', 'histopathology', 'biopsy'
+                        ]):
+                            journal_hints.append('pathology diagnostic medicine')
+                    
+                    journal_text = " ".join(journal_hints)
+                    
+                    # Combine keywords
+                    keyword_text = " ".join(keywords[:20]) if keywords else ""
+                    
+                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                        debug_log.write(f"[DEBUG] Journal hints: {journal_hints}\n")
+                        debug_log.write(f"[DEBUG] Combined journal text: {journal_text}\n")
+                    
+                    # Use enhanced SciBERT prediction with multiple text sources
                     scibert_result = predict_from_research_context(
-                        title=combined_titles,
-                        abstract=combined_abstracts,
-                        affiliation=combined_affiliations
+                        title=title_text,
+                        abstract=abstract_text,
+                        affiliation=affiliation_text + " " + journal_text + " " + keyword_text,
+                        keywords=keywords[:10] if keywords else []
                     )
                     
+                    with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                        debug_log.write(f"[DEBUG] SciBERT result: {scibert_result}\n")
+                        debug_log.write(f"[DEBUG] Checking confidence: {scibert_result['confidence']} > 0.20 = {scibert_result['confidence'] > 0.20}\n")
+                        debug_log.write(f"[DEBUG] Department != Unknown: {scibert_result['department'] != 'Unknown'}\n")
+                    
+                    # Lower confidence threshold for ORCID-based research analysis
+                    # since we have rich publication data
                     if (scibert_result['department'] != 'Unknown' and 
-                        scibert_result['confidence'] > 0.4):  # Higher threshold for works analysis
+                        scibert_result['confidence'] > 0.20):  # Lower threshold for rich ORCID data
                         with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
-                            debug_log.write(f"[DEBUG] SciBERT found department: {scibert_result['department']} (confidence: {scibert_result['confidence']:.3f})\n")
+                            debug_log.write(f"[DEBUG] Enhanced ORCID SciBERT found: {scibert_result['department']} (confidence: {scibert_result['confidence']:.3f})\n")
+                            debug_log.write(f"[DEBUG] Research context - Titles: {len(titles)}, Abstracts: {len(abstracts)}, Journals: {len(journal_names)}\n")
                         return scibert_result['department']
+                    else:
+                        with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                            debug_log.write(f"[DEBUG] SciBERT result failed threshold check\n")
                 
                 except Exception as e:
                     with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
-                        debug_log.write(f"[DEBUG] SciBERT analysis error: {e}\n")
+                        debug_log.write(f"[DEBUG] Enhanced SciBERT analysis error: {e}\n")
             
             return None
         except Exception as e:
-            # Log exception if needed
+            with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
+                debug_log.write(f"[DEBUG] Works analysis error: {e}\n")
             return None
 
 class DepartmentNormalizer:
     """Normalizes department names to standard forms."""
     
     DEPARTMENT_MAPPINGS = {
+        # Medical specialties
+        'obstetrics and gynecology': 'Obstetrics and Gynecology',
+        'obstetrics': 'Obstetrics and Gynecology',
+        'gynecology': 'Obstetrics and Gynecology',
+        'maternal fetal medicine': 'Obstetrics and Gynecology',
+        'reproductive medicine': 'Obstetrics and Gynecology',
+        'pediatrics': 'Pediatrics',
+        'pediatric': 'Pediatrics',
+        'child health': 'Pediatrics',
+        'neonatology': 'Pediatrics',
+        'cardiology': 'Cardiology',
+        'cardiac': 'Cardiology',
+        'cardiovascular': 'Cardiology',
+        'heart': 'Cardiology',
+        'oncology': 'Oncology',
+        'cancer': 'Oncology',
+        'tumor': 'Oncology',
+        'hematology': 'Oncology',
+        'dermatology': 'Dermatology',
+        'skin': 'Dermatology',
+        'psychiatry': 'Psychiatry',
+        'mental health': 'Psychiatry',
+        'psychology': 'Psychology',
+        'orthopedics': 'Orthopedics',
+        'orthopaedics': 'Orthopedics',
+        'bone': 'Orthopedics',
+        'joint': 'Orthopedics',
+        'neurology': 'Neurology',
+        'neurological': 'Neurology',
+        'brain': 'Neurology',
+        'anesthesiology': 'Anesthesiology',
+        'anesthesia': 'Anesthesiology',
+        'pain medicine': 'Anesthesiology',
+        'radiology': 'Radiology',
+        'imaging': 'Radiology',
+        'diagnostic radiology': 'Radiology',
+        'pathology': 'Pathology',
+        'pathological': 'Pathology',
+        'histopathology': 'Pathology',
+        
         # Biology variations
         'biology': 'Biology',
         'biological sciences': 'Biology',
         'life sciences': 'Biology',
-        'molecular biology': 'Molecular Biology',
-        'cell biology': 'Cell Biology',
-        'developmental biology': 'Developmental Biology',
+        'molecular biology': 'Biology',
+        'cell biology': 'Biology',
+        'developmental biology': 'Biology',
         
         # Chemistry variations
         'chemistry': 'Chemistry',
@@ -444,9 +609,9 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
     except Exception as e:
         print(f"Error in ORCID lookup for {name}: {e}")
     
-    # Fallback: Try SciBERT on available text with research context
+    # Enhanced SciBERT fallback with research context
     try:
-        # Collect any research-related text for better classification
+        # Try to get additional research context if available
         research_context = []
         
         # Add PI name for potential field inference
@@ -456,15 +621,32 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
         # Add institution for field specialization hints
         if institution != "Unknown":
             research_context.append(institution)
+            
+            # Add institutional context hints for better classification
+            institution_lower = institution.lower()
+            if 'medical' in institution_lower or 'hospital' in institution_lower:
+                research_context.append('medical research clinical')
+            elif 'cancer' in institution_lower:
+                research_context.append('oncology cancer research')
+            elif 'children' in institution_lower or 'pediatric' in institution_lower:
+                research_context.append('pediatrics child health')
+            elif 'heart' in institution_lower or 'cardiac' in institution_lower:
+                research_context.append('cardiology cardiovascular')
         
-        # Use name and institution as basic research context
+        # Use enhanced research context classification
         text_for_classification = " ".join(research_context)
         
         if len(text_for_classification.strip()) > 10:  # Ensure we have meaningful text
-            scibert_result = predict_department_scibert(text_for_classification)
+            scibert_result = predict_from_research_context(
+                title="",
+                abstract="",
+                affiliation=text_for_classification,
+                keywords=[]
+            )
             
+            # Lower threshold for fallback since we have limited context
             if (scibert_result['department'] != 'Unknown' and 
-                scibert_result['confidence'] > 0.25):  # Lower threshold for fallback
+                scibert_result['confidence'] > 0.22):  # Lower threshold for fallback
                 
                 normalized_dept = DepartmentNormalizer.normalize(scibert_result['department'])
                 
@@ -477,7 +659,7 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
                     'confidence': 'medium'
                 }
     except Exception as e:
-        print(f"Error in SciBERT lookup for {name}: {e}")
+        print(f"Error in enhanced SciBERT lookup for {name}: {e}")
     
     # Final fallback: Try institution-based heuristics
     try:

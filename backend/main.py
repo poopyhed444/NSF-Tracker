@@ -307,6 +307,35 @@ async def test_pi_lookup(name: str, institution: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in PI lookup: {str(e)}")
 
+@app.get("/api/collect-training-data")
+async def collect_training_data():
+    """
+    Collect training data from external sources (university descriptions, arXiv mappings, etc.).
+    This expands the training dataset beyond ORCID data.
+    """
+    try:
+        from training_data_sources import TrainingDataCollector
+        
+        collector = TrainingDataCollector()
+        data = await collector.collect_all_data()
+        
+        # Save the enhanced training data
+        final_data = collector.save_training_data(data)
+        
+        # Get statistics
+        from collections import Counter
+        label_counts = Counter(final_data['labels'])
+        
+        return {
+            "status": "success",
+            "message": "Training data collected and saved",
+            "total_examples": len(final_data['texts']),
+            "distribution": dict(label_counts.most_common()),
+            "sources": ["university_descriptions", "arxiv_mappings", "synthetic_examples"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error collecting training data: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="localhost", port=8000)

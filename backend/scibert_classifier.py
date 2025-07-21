@@ -50,7 +50,8 @@ class SciBERTDepartmentClassifier:
             self.embeddings = None
             self.labels = None
             self.classifier = None
-            self.confidence_threshold = 0.3
+            # Lower threshold to accept lower-confidence departments in ORCID context
+            self.confidence_threshold = 0.2
             
             self._initialized = True
     
@@ -375,9 +376,10 @@ class SciBERTDepartmentClassifier:
 # Global classifier instance
 _classifier = SciBERTDepartmentClassifier()
 
-def predict_department_scibert(text: str) -> Dict[str, any]:
-    """Convenience function for department prediction."""
-    return _classifier.predict_department(text)
+def predict_department_scibert(text: str) -> str:
+    """Convenience function for department prediction. Returns only the department name."""
+    # Return only the department string for simplicity
+    return _classifier.predict_department(text)["department"]
 
 def predict_from_research_context(title: str = "", 
                                 abstract: str = "", 
