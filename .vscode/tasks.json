@@ -8,6 +8,9 @@
 			"args": [
 				"main.py"
 			],
+			"options": {
+				"cwd": "${workspaceFolder}/backend"
+			},
 			"group": "build",
 			"isBackground": true,
 			"problemMatcher": []

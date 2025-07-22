@@ -2,7 +2,7 @@
 PI Department Lookup Module
 
 This module provides functionality to determine a principal investigator's 
-academic department using ORCID API with local caching.
+academic department using ORCID API, grant database mining, and SciBERT classification.
 """
 
 import json
@@ -60,6 +60,54 @@ class PILookupCache:
     def __init__(self):
         self.cache = self._load_cache()
     
+    def _normalize_name(self, name: str) -> str:
+        """
+        Normalize name format to ensure consistent cache keys.
+        Handles different formats like:
+        - "Kjersti Aagaard" -> "aagaard kjersti"
+        - "aagaard, kjersti marie" -> "aagaard kjersti"
+        - "Aagaard, K. M." -> "aagaard k"
+        
+        Strategy: Extract first and last name only, handle comma-separated formats
+        """
+        if not name:
+            return ""
+        
+        # Handle comma-separated format (Last, First Middle)
+        if ',' in name:
+            parts = name.split(',', 1)
+            last_name = parts[0].strip()
+            first_part = parts[1].strip() if len(parts) > 1 else ""
+            
+            # Extract first name from the first part (ignore middle names)
+            first_names = [part.strip() for part in first_part.split() if part.strip() and len(part.strip()) > 1]
+            first_name = first_names[0] if first_names else ""
+            
+            if first_name and last_name:
+                return ' '.join(sorted([first_name.lower(), last_name.lower()]))
+            elif last_name:
+                return last_name.lower()
+            else:
+                return ""
+        
+        # Handle regular format (First Middle Last)
+        cleaned = name.replace('.', ' ').strip()
+        name_parts = [part.strip().lower() for part in cleaned.split() if part.strip() and len(part.strip()) > 1]
+        
+        if len(name_parts) == 0:
+            return ""
+        elif len(name_parts) == 1:
+            return name_parts[0]
+        elif len(name_parts) == 2:
+            # Two parts: assume first and last
+            return ' '.join(sorted(name_parts))
+        else:
+            # Multiple parts: use first and last word
+            first_part = name_parts[0]
+            last_part = name_parts[-1]
+            
+            return ' '.join(sorted([first_part, last_part]))
+    
     def _load_cache(self) -> Dict:
         """Load cache from JSON file."""
         try:
@@ -89,7 +137,7 @@ class PILookupCache:
     
     def get(self, name: str, institution: str) -> Optional[Dict]:
         """Get cached result for PI."""
-        key = f"{name.lower()}|{institution.lower()}"
+        key = self._normalize_name(name) + "|" + institution.lower().strip()
         entry = self.cache.get(key)
         
         if entry and not self._is_expired(entry.get('timestamp', '')):
@@ -98,7 +146,7 @@ class PILookupCache:
     
     def set(self, name: str, institution: str, department: str, source: str, confidence: str):
         """Cache PI lookup result."""
-        key = f"{name.lower()}|{institution.lower()}"
+        key = self._normalize_name(name) + "|" + institution.lower().strip()
         self.cache[key] = {
             'department': department,
             'source': source,
@@ -139,9 +187,11 @@ class ORCIDLookup:
                     family = name_parts[-1] if len(name_parts) > 1 else ""
                     middle = ' '.join(name_parts[1:-1]) if len(name_parts) > 2 else ""
 
+                # Create search query - be less restrictive with middle names
                 search_query = f'given-names:{given} AND family-name:{family}'
-                if middle:
-                    search_query += f' AND other-names:{middle}'
+                # Don't include middle names in the primary search as they might not match exactly
+                # if middle:
+                #     search_query += f' AND other-names:{middle}'
 
                 headers = {
                     'Accept': 'application/json',
@@ -564,13 +614,16 @@ class DepartmentNormalizer:
 # Initialize cache
 _cache = PILookupCache()
 
-async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
+# --- Main Department Lookup Orchestration ---
+
+async def get_pi_department(name: str, institution: str, force_refresh: bool = False) -> Dict[str, str]:
     """
-    Get PI department using ORCID lookup with caching.
+    Get PI department using a multi-step lookup process with caching.
     
     Args:
         name: Full name of the PI
         institution: Institution name
+        force_refresh: If True, bypass cache and perform a fresh lookup.
     
     Returns:
         Dict with keys: 'department', 'source', 'confidence'
@@ -582,16 +635,19 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
             'confidence': 'none'
         }
     
-    # Check cache first
-    cached_result = _cache.get(name, institution)
-    if cached_result:
-        return {
-            'department': cached_result['department'],
-            'source': cached_result['source'],
-            'confidence': cached_result['confidence']
-        }
+    # Check cache first, unless a refresh is forced
+    if not force_refresh:
+        cached_result = _cache.get(name, institution)
+        if cached_result:
+            return {
+                'department': cached_result['department'],
+                'source': cached_result['source'],
+                'confidence': cached_result['confidence']
+            }
     
-    # Try ORCID lookup
+    # --- Start of the full lookup process ---
+    
+    # 1. Try ORCID lookup
     try:
         orcid_result = await ORCIDLookup.search_orcid(name, institution)
         if orcid_result:
@@ -609,7 +665,7 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
     except Exception as e:
         print(f"Error in ORCID lookup for {name}: {e}")
     
-    # Enhanced SciBERT fallback with research context
+    # 2. Enhanced SciBERT fallback with research context
     try:
         # Try to get additional research context if available
         research_context = []
@@ -661,7 +717,31 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
     except Exception as e:
         print(f"Error in enhanced SciBERT lookup for {name}: {e}")
     
-    # Final fallback: Try institution-based heuristics
+    # 3. Grant database mining (NEW)
+    try:
+        from grant_mining import classify_pi_from_grants
+        
+        grant_result = await classify_pi_from_grants(name, institution)
+        if (grant_result['department'] != 'Unknown' and 
+            grant_result.get('confidence_score', 0) > 0.20):  # Lowered threshold for more coverage
+            
+            normalized_dept = DepartmentNormalizer.normalize(grant_result['department'])
+            
+            # Cache result with grant source info
+            confidence = grant_result['confidence']
+            source = f"grant_mining_{grant_result.get('grant_count', 0)}_grants"
+            
+            _cache.set(name, institution, normalized_dept, source, confidence)
+            
+            return {
+                'department': normalized_dept,
+                'source': source,
+                'confidence': confidence
+            }
+    except Exception as e:
+        print(f"Error in grant mining lookup for {name}: {e}")
+    
+    # 4. Final fallback: Try institution-based heuristics
     try:
         if institution != "Unknown":
             institution_lower = institution.lower()
@@ -669,17 +749,29 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
             # Institution type heuristics
             institution_hints = {
                 'medical center': 'Medicine',
-                'cancer center': 'Medicine', 
+                'cancer center': 'Oncology', 
                 'hospital': 'Medicine',
                 'medical college': 'Medicine',
                 'school of medicine': 'Medicine',
                 'health sciences': 'Medicine',
                 'tech': 'Engineering',
                 'institute of technology': 'Engineering',
+                'massachusetts institute of technology': 'Engineering',
+                'california institute of technology': 'Engineering',
                 'agricultural': 'Biology',
                 'marine': 'Biology',
                 'astronomical': 'Physics',
                 'observatory': 'Physics',
+                'biomedical': 'Medicine',
+                'veterinary': 'Veterinary Medicine',
+                'dental': 'Dentistry',
+                'pharmacy': 'Pharmacy',
+                'nursing': 'Nursing',
+                'psychiatry': 'Psychiatry',
+                'neurology': 'Neurology',
+                'cardiology': 'Cardiology',
+                'children': 'Pediatrics',
+                'pediatric': 'Pediatrics',
             }
             
             for hint, dept in institution_hints.items():
@@ -695,49 +787,46 @@ async def get_pi_department(name: str, institution: str) -> Dict[str, str]:
     except Exception as e:
         print(f"Error in institution heuristics for {name}: {e}")
     
-    # If all lookups fail
+    # If all lookups fail, cache the 'Unknown' result to avoid repeated failed lookups
     result = {
         'department': 'Unknown',
         'source': 'none',
         'confidence': 'none'
     }
     
-    # Cache the unknown result to avoid repeated lookups
+    # Cache the unknown result to avoid repeated lookups for PIs that are truly not found
     _cache.set(name, institution, 'Unknown', 'none', 'none')
     
     return result
 
-def get_pi_department_sync(name: str, institution: str) -> Dict[str, str]:
+def get_pi_department_sync(name: str, institution: str, force_refresh: bool = False) -> Dict[str, str]:
     """
     Synchronous wrapper for get_pi_department.
     
     Args:
         name: Full name of the PI
         institution: Institution name
+        force_refresh: If True, bypass cache and perform a fresh lookup.
     
     Returns:
         Dict with keys: 'department', 'source', 'confidence'
     """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If we're already in an async context, we can't use run()
-            # Return cached result or Unknown
-            cached_result = _cache.get(name, institution)
-            if cached_result:
-                return {
-                    'department': cached_result['department'],
-                    'source': cached_result['source'],
-                    'confidence': cached_result['confidence']
-                }
-            else:
-                return {
-                    'department': 'Unknown',
-                    'source': 'cache_only',
-                    'confidence': 'none'
-                }
-        else:
-            return asyncio.run(get_pi_department(name, institution))
+        # This is a simplified approach for environments that might already have a running loop.
+        # A more robust solution for production might involve a task queue.
+        return asyncio.run(get_pi_department(name, institution, force_refresh))
+    except RuntimeError:
+        # This can happen if an event loop is already running.
+        # As a fallback, we'll check the cache but won't perform a new async lookup
+        # to avoid "RuntimeError: asyncio.run() cannot be called from a running event loop".
+        cached_result = _cache.get(name, institution)
+        if cached_result:
+            return cached_result
+        return {
+            'department': 'Unknown',
+            'source': 'cache_only_in_running_loop',
+            'confidence': 'none'
+        }
     except Exception as e:
         print(f"Error in sync PI lookup: {e}")
         return {

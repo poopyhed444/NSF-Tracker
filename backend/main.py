@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
 import httpx
 import asyncio
+import os
 from typing import List, Dict, Any
 import json
 from collections import defaultdict
@@ -79,8 +80,8 @@ async def guess_department(grant: Dict[str, Any]) -> Dict[str, str]:
     
     if pi_name and isinstance(pi_name, str) and institution_name != "Unknown":
         try:
-            # Use the PI lookup module
-            result = await get_pi_department(pi_name.strip(), institution_name)
+            # Use the PI lookup module with force_refresh to ensure we get the latest enhanced results
+            result = await get_pi_department(pi_name.strip(), institution_name, force_refresh=True)
             if result['department'] != "Unknown":
                 return result
         except Exception as e:
@@ -292,20 +293,100 @@ async def train_scibert_classifier(force_retrain: bool = False):
         raise HTTPException(status_code=500, detail=f"Error training classifier: {str(e)}")
 
 @app.get("/api/test-pi-lookup")
-async def test_pi_lookup(name: str, institution: str):
+async def test_pi_lookup(name: str, institution: str, force_refresh: bool = False):
     """
     Test endpoint for PI department lookup.
-    Usage: /api/test-pi-lookup?name=Jennifer Doudna&institution=UC Berkeley
+    Usage: /api/test-pi-lookup?name=Jennifer Doudna&institution=UC Berkeley&force_refresh=true
     """
     try:
-        result = await get_pi_department(name, institution)
+        result = await get_pi_department(name, institution, force_refresh=force_refresh)
         return {
             "pi_name": name,
             "institution": institution,
+            "force_refresh": force_refresh,
             "result": result
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in PI lookup: {str(e)}")
+
+@app.post("/api/test-multiple-lookups")
+async def test_multiple_lookups(force_refresh: bool = False):
+    """
+    Test multiple PI lookups to verify the enhanced classification system.
+    This is useful for testing cache regeneration and classification accuracy.
+    """
+    try:
+        test_cases = [
+            ("Kjersti Aagaard", "Baylor College of Medicine"),
+            ("aagaard, kjersti marie", "baylor college of medicine"),  # Test name normalization
+            ("Jennifer Doudna", "University of California, Berkeley"),
+            ("Craig Venter", "J. Craig Venter Institute"),
+            ("Frances Arnold", "California Institute of Technology"),
+            ("George Church", "Harvard Medical School")
+        ]
+        
+        results = []
+        for name, institution in test_cases:
+            try:
+                result = await get_pi_department(name, institution, force_refresh=force_refresh)
+                results.append({
+                    "pi_name": name,
+                    "institution": institution,
+                    "result": result
+                })
+            except Exception as e:
+                results.append({
+                    "pi_name": name,
+                    "institution": institution,
+                    "error": str(e)
+                })
+        
+        return {
+            "status": "success",
+            "test_cases": len(test_cases),
+            "force_refresh": force_refresh,
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in multiple PI lookup test: {str(e)}")
+
+@app.post("/api/refresh-specific-pi")
+async def refresh_specific_pi(name: str, institution: str):
+    """
+    Force refresh a specific PI's department classification.
+    Usage: POST /api/refresh-specific-pi?name=Kjersti Aagaard&institution=Baylor College of Medicine
+    """
+    try:
+        # Force refresh this specific PI
+        result = await get_pi_department(name, institution, force_refresh=True)
+        
+        return {
+            "status": "success",
+            "pi_name": name,
+            "institution": institution,
+            "message": "PI department classification refreshed with latest enhanced system",
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refreshing PI: {str(e)}")
+
+@app.get("/api/test-grant-mining")
+async def test_grant_mining(name: str, institution: str):
+    """
+    Test endpoint for grant database mining.
+    Usage: /api/test-grant-mining?name=Jennifer Doudna&institution=University of California, Berkeley
+    """
+    try:
+        from grant_mining import classify_pi_from_grants
+        
+        result = await classify_pi_from_grants(name, institution)
+        return {
+            "pi_name": name,
+            "institution": institution,
+            "grant_mining_result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in grant mining: {str(e)}")
 
 @app.get("/api/collect-training-data")
 async def collect_training_data():
@@ -335,6 +416,115 @@ async def collect_training_data():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error collecting training data: {str(e)}")
+
+@app.post("/api/cache/clear")
+async def clear_cache():
+    """
+    Clear the entire PI department cache.
+    This will force all future lookups to use the improved classification system.
+    """
+    try:
+        from cache_refresh import CacheManager
+        import os
+        
+        manager = CacheManager()
+        success = manager.clear_cache()
+        
+        # Ensure the cache file is completely removed
+        cache_file = "pi_department_cache.json"
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+        
+        return {
+            "status": "success",
+            "message": "Cache cleared successfully. New lookups will use the improved classification system with fresh ORCID and enhanced SciBERT analysis.",
+            "note": "Next lookup will regenerate the cache with the latest classification improvements."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+
+@app.get("/api/cache/stats")
+async def get_cache_stats():
+    """Get statistics about the current cache state."""
+    try:
+        from cache_refresh import CacheManager
+        
+        manager = CacheManager()
+        stats = manager.get_cache_stats()
+        
+        if "error" in stats:
+            return {"error": stats["error"]}
+        
+        return stats
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting cache stats: {str(e)}")
+
+@app.post("/api/cache/refresh-unknowns")
+async def refresh_unknown_pis():
+    """
+    Refresh all PIs marked as 'Unknown' in the cache using the improved classification system.
+    This is useful after enhancing thresholds or adding new classification methods.
+    """
+    try:
+        import json
+        import os
+        cache_file = os.path.join(os.path.dirname(__file__), "pi_department_cache.json")
+        
+        if not os.path.exists(cache_file):
+            return {"error": "Cache file not found", "refreshed": 0}
+        
+        # Read current cache
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            cache = json.load(f)
+        
+        unknown_entries = []
+        for key, entry in cache.items():
+            if entry.get('department') == 'Unknown':
+                # Parse the key to get name and institution
+                if '|' in key:
+                    name_normalized, institution = key.split('|', 1)
+                    # Convert normalized name back to readable format
+                    name_parts = name_normalized.split()
+                    if len(name_parts) == 2:
+                        name = f"{name_parts[1].title()} {name_parts[0].title()}"
+                    else:
+                        name = name_normalized.title()
+                    
+                    unknown_entries.append((name, institution.title(), key))
+        
+        refreshed_count = 0
+        successful_classifications = []
+        
+        # Refresh each unknown entry
+        for name, institution, cache_key in unknown_entries[:10]:  # Limit to 10 to avoid timeouts
+            try:
+                result = await get_pi_department(name, institution, force_refresh=True)
+                if result['department'] != 'Unknown':
+                    refreshed_count += 1
+                    successful_classifications.append({
+                        "name": name,
+                        "institution": institution,
+                        "old_department": "Unknown",
+                        "new_department": result['department'],
+                        "source": result['source'],
+                        "confidence": result['confidence']
+                    })
+            except Exception as e:
+                print(f"Error refreshing {name}: {e}")
+                continue
+        
+        return {
+            "message": f"Refreshed {refreshed_count} out of {len(unknown_entries)} unknown PIs",
+            "total_unknown": len(unknown_entries),
+            "refreshed": refreshed_count,
+            "successful_classifications": successful_classifications,
+            "note": "Limited to 10 entries per request to avoid timeouts. Run again for more."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refreshing unknowns: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
