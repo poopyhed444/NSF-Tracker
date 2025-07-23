@@ -243,7 +243,7 @@
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-21T23:33:08.416593"
+    "timestamp": "2025-07-22T20:21:28.127123"
   },
   "langer robert|massachusetts institute of technology": {
     "department": "Neurology",
@@ -285,25 +285,25 @@
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-21T23:20:37.193628"
+    "timestamp": "2025-07-22T20:21:30.648878"
   },
   "abel edwin|university of iowa": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:20:37.777047"
+    "department": "Genetics",
+    "source": "grant_mining_30_grants",
+    "confidence": "low",
+    "timestamp": "2025-07-22T20:21:31.512783"
   },
   "abell thomas|university of louisville": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:20:38.999873"
+    "department": "Biology",
+    "source": "grant_mining_3_grants",
+    "confidence": "low",
+    "timestamp": "2025-07-22T20:21:33.190503"
   },
   "abernathy shawn|howard university": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:20:39.644557"
+    "department": "Engineering",
+    "source": "grant_mining_3_grants",
+    "confidence": "medium",
+    "timestamp": "2025-07-22T20:21:34.026868"
   },
   "abhyankar vinay|rochester institute of technology": {
     "department": "Biomedical Engineering",
@@ -318,16 +318,16 @@
     "timestamp": "2025-07-21T23:20:40.191215"
   },
   "abiff muta|case western reserve university": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:20:42.885658"
+    "department": "Oncology",
+    "source": "grant_mining_4_grants",
+    "confidence": "low",
+    "timestamp": "2025-07-22T20:21:34.963479"
   },
   "abimiku alash'le|institute of human virology": {
     "department": "Unknown",
     "source": "none",
     "confidence": "none",
-    "timestamp": "2025-07-21T23:20:43.458216"
+    "timestamp": "2025-07-22T20:21:35.807707"
   },
   "abisambra jose|university of florida": {
     "department": "Neuroscience",
@@ -342,10 +342,10 @@
     "timestamp": "2025-07-21T23:20:45.382396"
   },
   "abkowitz janis|university of washington": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:20:51.461336"
+    "department": "Biology",
+    "source": "grant_mining_1_grants",
+    "confidence": "medium",
+    "timestamp": "2025-07-22T20:21:36.783157"
   },
   "ables elizabeth|east carolina university": {
     "department": "Biology",
@@ -354,10 +354,10 @@
     "timestamp": "2025-07-21T23:20:52.349934"
   },
   "ablordeppey enyo|washington university": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:20:54.707598"
+    "department": "Radiology",
+    "source": "grant_mining_4_grants",
+    "confidence": "low",
+    "timestamp": "2025-07-22T20:21:38.249185"
   },
   "abosch aviva|university of nebraska medical center": {
     "department": "Medicine",
@@ -372,10 +372,10 @@
     "timestamp": "2025-07-21T23:20:59.829830"
   },
   "aboualaiwi wissam|university of toledo health sci campus": {
-    "department": "Unknown",
-    "source": "none",
-    "confidence": "none",
-    "timestamp": "2025-07-21T23:21:00.802767"
+    "department": "Cardiology",
+    "source": "grant_mining_6_grants",
+    "confidence": "low",
+    "timestamp": "2025-07-22T20:21:39.315901"
   },
   "aboudehen karam|state university new york stony brook": {
     "department": "Medicine",
