@@ -9,7 +9,9 @@ from fastapi import APIRouter, HTTPException
 from layoff_estimator import (
     estimate_institution_impact,
     analyze_pi_lab_impact,
-    generate_layoff_risk_leaderboard
+    generate_layoff_risk_leaderboard,
+    fetch_nsf_grants,
+    fetch_combined_grants
 )
 from department_costs import get_department_cost_summary
 
@@ -206,3 +208,224 @@ async def get_institution_department_breakdown(institution: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing institution departments: {str(e)}")
+
+@layoff_router.get("/test-nsf-grants")
+async def test_nsf_integration(organization: str = None, pi_name: str = None, limit: int = 10):
+    """
+    Test endpoint for NSF grant integration.
+    Usage: /api/test-nsf-grants?organization=MIT&limit=5
+    """
+    try:
+        nsf_grants = await fetch_nsf_grants(organization=organization, pi_name=pi_name, active_only=True)
+        
+        return {
+            "nsf_grants_found": len(nsf_grants),
+            "organization_filter": organization,
+            "pi_name_filter": pi_name,
+            "sample_grants": nsf_grants[:limit],
+            "data_sources": ["NSF Award Search API"],
+            "note": "This shows NSF grants in NIH-compatible format"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error testing NSF integration: {str(e)}")
+
+@layoff_router.get("/combined-funding-analysis/{institution}")
+async def get_combined_funding_analysis(institution: str):
+    """
+    Get comprehensive funding analysis combining NIH and NSF data.
+    Usage: /api/combined-funding-analysis/Harvard University
+    """
+    try:
+        # Get combined grants
+        combined_grants = await fetch_combined_grants(organization=institution, active_only=True)
+        
+        if not combined_grants:
+            return {
+                "error": f"No grants found for {institution}",
+                "institution": institution
+            }
+        
+        # Separate by agency
+        nih_grants = [g for g in combined_grants if g.get("funding_agency") == "NIH"]
+        nsf_grants = [g for g in combined_grants if g.get("funding_agency") == "NSF"]
+        
+        # Calculate funding totals
+        total_funding = 0
+        nih_funding = 0
+        nsf_funding = 0
+        
+        for grant in combined_grants:
+            try:
+                amount = float(grant.get("award_amount", 0)) if grant.get("award_amount") else 0
+                total_funding += amount
+            except (ValueError, TypeError):
+                pass
+        
+        for grant in nih_grants:
+            try:
+                amount = float(grant.get("award_amount", 0)) if grant.get("award_amount") else 0
+                nih_funding += amount
+            except (ValueError, TypeError):
+                pass
+        
+        for grant in nsf_grants:
+            try:
+                amount = float(grant.get("award_amount", 0)) if grant.get("award_amount") else 0
+                nsf_funding += amount
+            except (ValueError, TypeError):
+                pass
+        
+        # Analyze by department for each agency
+        from collections import defaultdict
+        from layoff_estimator import _estimate_grant_department
+        
+        nih_dept_breakdown = defaultdict(lambda: {"grants": 0, "funding": 0})
+        nsf_dept_breakdown = defaultdict(lambda: {"grants": 0, "funding": 0})
+        
+        for grant in nih_grants:
+            dept = _estimate_grant_department(grant)
+            nih_dept_breakdown[dept]["grants"] += 1
+            try:
+                amount = float(grant.get("award_amount", 0)) if grant.get("award_amount") else 0
+                nih_dept_breakdown[dept]["funding"] += amount
+            except (ValueError, TypeError):
+                pass
+        
+        for grant in nsf_grants:
+            dept = _estimate_grant_department(grant)
+            nsf_dept_breakdown[dept]["grants"] += 1
+            try:
+                amount = float(grant.get("award_amount", 0)) if grant.get("award_amount") else 0
+                nsf_dept_breakdown[dept]["funding"] += amount
+            except (ValueError, TypeError):
+                pass
+        
+        return {
+            "institution": institution,
+            "total_funding": total_funding,
+            "funding_breakdown": {
+                "nih_funding": nih_funding,
+                "nsf_funding": nsf_funding,
+                "nih_percentage": round(nih_funding / total_funding * 100, 1) if total_funding > 0 else 0,
+                "nsf_percentage": round(nsf_funding / total_funding * 100, 1) if total_funding > 0 else 0
+            },
+            "grant_counts": {
+                "total_grants": len(combined_grants),
+                "nih_grants": len(nih_grants),
+                "nsf_grants": len(nsf_grants)
+            },
+            "nih_department_breakdown": [
+                {
+                    "department": dept,
+                    "grants": info["grants"],
+                    "funding": info["funding"],
+                    "percentage": round(info["funding"] / nih_funding * 100, 1) if nih_funding > 0 else 0
+                }
+                for dept, info in sorted(nih_dept_breakdown.items(), key=lambda x: x[1]["funding"], reverse=True)
+            ][:10],
+            "nsf_department_breakdown": [
+                {
+                    "department": dept,
+                    "grants": info["grants"],
+                    "funding": info["funding"],
+                    "percentage": round(info["funding"] / nsf_funding * 100, 1) if nsf_funding > 0 else 0
+                }
+                for dept, info in sorted(nsf_dept_breakdown.items(), key=lambda x: x[1]["funding"], reverse=True)
+            ][:10],
+            "diversification_analysis": {
+                "has_both_agencies": len(nih_grants) > 0 and len(nsf_grants) > 0,
+                "funding_concentration": "HIGH" if len(combined_grants) <= 3 else "MEDIUM" if len(combined_grants) <= 6 else "LOW",
+                "agency_balance": "BALANCED" if abs(nih_funding - nsf_funding) / total_funding < 0.3 else "NIH_HEAVY" if nih_funding > nsf_funding else "NSF_HEAVY"
+            },
+            "last_updated": "2025-07-23T00:00:00"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing combined funding: {str(e)}")
+
+@layoff_router.get("/funding-agency-comparison")
+async def get_funding_agency_comparison(limit: int = 20):
+    """
+    Compare institutions by their NIH vs NSF funding profiles.
+    Usage: /api/funding-agency-comparison?limit=20
+    """
+    try:
+        # Get combined grants for all institutions
+        combined_grants = await fetch_combined_grants(active_only=True)
+        
+        if not combined_grants:
+            return {"error": "No grant data available"}
+        
+        # Group by institution and agency
+        from collections import defaultdict
+        institution_data = defaultdict(lambda: {"nih": 0, "nsf": 0, "total": 0})
+        
+        for grant in combined_grants:
+            org_info = grant.get("organization", {})
+            if isinstance(org_info, list) and len(org_info) > 0:
+                org_name = org_info[0].get("org_name", "Unknown")
+            elif isinstance(org_info, dict):
+                org_name = org_info.get("org_name", "Unknown")
+            else:
+                continue
+                
+            if org_name != "Unknown":
+                try:
+                    amount = float(grant.get("award_amount", 0))
+                    institution_data[org_name]["total"] += amount
+                    
+                    if grant.get("funding_agency") == "NIH":
+                        institution_data[org_name]["nih"] += amount
+                    elif grant.get("funding_agency") == "NSF":
+                        institution_data[org_name]["nsf"] += amount
+                except (ValueError, TypeError):
+                    pass
+        
+        # Calculate metrics for each institution
+        comparison_data = []
+        for institution, funding in institution_data.items():
+            if funding["total"] > 100000:  # Only include substantial funding
+                nih_pct = (funding["nih"] / funding["total"] * 100) if funding["total"] > 0 else 0
+                nsf_pct = (funding["nsf"] / funding["total"] * 100) if funding["total"] > 0 else 0
+                
+                # Categorize funding profile
+                if nih_pct > 80:
+                    profile = "NIH-Dominant"
+                elif nsf_pct > 80:
+                    profile = "NSF-Dominant"
+                elif abs(nih_pct - nsf_pct) < 20:
+                    profile = "Balanced"
+                elif nih_pct > nsf_pct:
+                    profile = "NIH-Heavy"
+                else:
+                    profile = "NSF-Heavy"
+                
+                comparison_data.append({
+                    "institution": institution,
+                    "total_funding": funding["total"],
+                    "nih_funding": funding["nih"],
+                    "nsf_funding": funding["nsf"],
+                    "nih_percentage": round(nih_pct, 1),
+                    "nsf_percentage": round(nsf_pct, 1),
+                    "funding_profile": profile,
+                    "diversification_score": min(nih_pct, nsf_pct)  # Lower of the two percentages
+                })
+        
+        # Sort by total funding
+        comparison_data.sort(key=lambda x: x["total_funding"], reverse=True)
+        
+        return {
+            "data": comparison_data[:limit],
+            "total_institutions": len(comparison_data),
+            "summary": {
+                "nih_dominant": len([x for x in comparison_data if x["funding_profile"] == "NIH-Dominant"]),
+                "nsf_dominant": len([x for x in comparison_data if x["funding_profile"] == "NSF-Dominant"]),
+                "balanced": len([x for x in comparison_data if x["funding_profile"] == "Balanced"]),
+                "total_funding_analyzed": sum(x["total_funding"] for x in comparison_data)
+            },
+            "last_updated": "2025-07-23T00:00:00"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating agency comparison: {str(e)}")
