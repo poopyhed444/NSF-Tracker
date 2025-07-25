@@ -1,0 +1,216 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+function App() {
+  const [leaderboardData, setLeaderboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const fetchLeaderboard = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await axios.get('/api/layoff-leaderboard?limit=25');
+      setLeaderboardData(response.data);
+      setLastUpdated(new Date().toLocaleString());
+    } catch (err) {
+      setError(`Failed to fetch data: ${err.message}`);
+      console.error('Error fetching leaderboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, []);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatNumber = (num) => {
+    return new Intl.NumberFormat('en-US').format(num);
+  };
+
+  const getRiskBadgeClass = (riskLevel) => {
+    const level = riskLevel.toLowerCase();
+    return `risk-badge risk-${level}`;
+  };
+
+  const InstitutionCard = ({ institution }) => {
+    const nihPercentage = institution.funding_diversification?.nih_percentage || 0;
+    const nsfPercentage = institution.funding_diversification?.nsf_percentage || 0;
+
+    return (
+      <div className="institution-card">
+        <div className="institution-header">
+          <div className="institution-name">{institution.institution}</div>
+          <div className={getRiskBadgeClass(institution.risk_level)}>
+            {institution.risk_level}
+          </div>
+        </div>
+
+        <div className="metrics-grid">
+          <div className="metric">
+            <div className="metric-label">At-Risk Positions</div>
+            <div className="metric-value">{institution.at_risk_positions}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Recently Lost Positions</div>
+            <div className="metric-value">{institution.recently_lost_positions}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Total Lab Size</div>
+            <div className="metric-value">{institution.estimated_lab_size}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Risk Score</div>
+            <div className="metric-value">{institution.risk_score}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Active Funding</div>
+            <div className="metric-value">{formatCurrency(institution.total_active_funding)}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Funding Cliff</div>
+            <div className="metric-value">{institution.funding_cliff_percentage}%</div>
+          </div>
+        </div>
+
+        {institution.funding_diversification && (
+          <div className="funding-breakdown">
+            <div className="funding-breakdown-label">Funding Sources</div>
+            <div className="funding-bar">
+              <div 
+                className="funding-nih" 
+                style={{ width: `${nihPercentage}%` }}
+              ></div>
+              <div 
+                className="funding-nsf" 
+                style={{ width: `${nsfPercentage}%` }}
+              ></div>
+            </div>
+            <div className="funding-legend">
+              <div className="legend-item">
+                <div className="legend-color funding-nih"></div>
+                <span>NIH: {nihPercentage}% ({formatCurrency(institution.funding_diversification.nih_funding)})</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-color funding-nsf"></div>
+                <span>NSF: {nsfPercentage}% ({formatCurrency(institution.funding_diversification.nsf_funding)})</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {institution.top_departments && institution.top_departments.length > 0 && (
+          <div className="departments">
+            <div className="departments-label">Top Departments by Funding</div>
+            <div className="department-tags">
+              {institution.top_departments.map((dept, index) => (
+                <div 
+                  key={index} 
+                  className={`department-tag ${index === 0 ? 'primary' : ''}`}
+                  title={`${dept.grants} grants, ${formatCurrency(dept.funding)} (${dept.percentage}%)`}
+                >
+                  {dept.department} ({dept.percentage}%)
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="loading">Loading layoff risk data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container">
+        <div className="error">
+          <strong>Error:</strong> {error}
+          <br />
+          <button onClick={fetchLeaderboard} className="refresh-button" style={{ marginTop: '10px' }}>
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalAtRisk = leaderboardData?.data?.reduce((sum, inst) => sum + inst.at_risk_positions, 0) || 0;
+  const totalRecentlyLost = leaderboardData?.data?.reduce((sum, inst) => sum + inst.recently_lost_positions, 0) || 0;
+  const totalFunding = leaderboardData?.data?.reduce((sum, inst) => sum + inst.total_active_funding, 0) || 0;
+
+  return (
+    <div className="container">
+      <div className="header">
+        <h1>🚨 Academic Layoff Risk Tracker</h1>
+        <p>Real-time analysis of NIH & NSF funding risks across research institutions</p>
+      </div>
+
+      <div className="stats-bar">
+        <div className="stat-item">
+          <div className="stat-number">{formatNumber(totalAtRisk)}</div>
+          <div className="stat-label">Total At-Risk Positions</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-number">{formatNumber(totalRecentlyLost)}</div>
+          <div className="stat-label">Recently Lost Positions</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-number">{leaderboardData?.total_institutions || 0}</div>
+          <div className="stat-label">Institutions Analyzed</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-number">{formatCurrency(totalFunding)}</div>
+          <div className="stat-label">Total Active Funding</div>
+        </div>
+      </div>
+
+      <button 
+        onClick={fetchLeaderboard} 
+        className="refresh-button"
+        disabled={loading}
+      >
+        {loading ? 'Refreshing...' : '🔄 Refresh Data'}
+      </button>
+
+      <div className="leaderboard">
+        <div className="leaderboard-header">
+          🏆 Institution Risk Leaderboard
+          {lastUpdated && <span style={{ float: 'right', fontSize: '0.9rem', opacity: 0.8 }}>
+            Last updated: {lastUpdated}
+          </span>}
+        </div>
+        
+        {leaderboardData?.data?.map((institution, index) => (
+          <InstitutionCard key={index} institution={institution} />
+        ))}
+      </div>
+
+      <div style={{ marginTop: '30px', padding: '20px', background: 'white', borderRadius: '10px', fontSize: '0.9rem', color: '#666' }}>
+        <strong>Methodology:</strong> Risk scores combine funding cliff analysis (40%), recent funding loss (30%), lab size impact (20%), 
+        and grant concentration penalties (10%). Department-specific cost models and agency diversification bonuses are applied. 
+        Data sources: NIH RePORTER and NSF Award Search APIs.
+      </div>
+    </div>
+  );
+}
+
+export default App;
