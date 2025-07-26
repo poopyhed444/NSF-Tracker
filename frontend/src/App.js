@@ -45,6 +45,63 @@ function App() {
     return `risk-badge risk-${level}`;
   };
 
+  const exportToCSV = () => {
+    if (!leaderboardData?.data) return;
+
+    const headers = [
+      'Institution',
+      'Risk Level',
+      'Risk Score',
+      'At-Risk Positions',
+      'Recently Lost Positions',
+      'Total Lab Size',
+      'Funding Cliff %',
+      'Active Funding',
+      'Active Grants Count',
+      'Terminated Grants Count',
+      'Top Departments',
+      'NIH Funding',
+      'NSF Funding',
+      'NIH Percentage',
+      'NSF Percentage'
+    ];
+
+    const csvData = leaderboardData.data.map(institution => [
+      institution.institution,
+      institution.risk_level,
+      institution.risk_score,
+      institution.at_risk_positions,
+      institution.recently_lost_positions,
+      institution.estimated_lab_size,
+      institution.funding_cliff_percentage,
+      institution.total_active_funding,
+      institution.active_grants_count,
+      institution.terminated_grants_count,
+      institution.top_departments?.map(d => `${d.department} (${d.percentage}%)`).join('; ') || '',
+      institution.funding_diversification?.nih_funding || 0,
+      institution.funding_diversification?.nsf_funding || 0,
+      institution.funding_diversification?.nih_percentage || 0,
+      institution.funding_diversification?.nsf_percentage || 0
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => 
+        typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell
+      ).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `layoff-risk-leaderboard-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const InstitutionCard = ({ institution }) => {
     const nihPercentage = institution.funding_diversification?.nih_percentage || 0;
     const nsfPercentage = institution.funding_diversification?.nsf_percentage || 0;
@@ -183,13 +240,34 @@ function App() {
         </div>
       </div>
 
-      <button 
-        onClick={fetchLeaderboard} 
-        className="refresh-button"
-        disabled={loading}
-      >
-        {loading ? 'Refreshing...' : '🔄 Refresh Data'}
-      </button>
+      <div className="leaderboard-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <button 
+          onClick={fetchLeaderboard} 
+          className="refresh-button"
+          disabled={loading}
+        >
+          {loading ? 'Refreshing...' : '🔄 Refresh Data'}
+        </button>
+
+        <button 
+          onClick={exportToCSV}
+          className="export-button"
+          disabled={!leaderboardData?.data || loading}
+          style={{
+            padding: '10px 20px',
+            background: '#28a745',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: leaderboardData?.data ? 'pointer' : 'not-allowed',
+            fontSize: '14px',
+            fontWeight: '500',
+            opacity: leaderboardData?.data ? 1 : 0.6
+          }}
+        >
+          📊 Export to CSV
+        </button>
+      </div>
 
       <div className="leaderboard">
         <div className="leaderboard-header">

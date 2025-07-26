@@ -778,106 +778,27 @@ async def analyze_pi_lab(pi_name: str, institution: str, cost_per_researcher: fl
 
 @app.get("/api/layoff-leaderboard")
 async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20):
-    """
-    Get institutions ranked by layoff risk based on funding cliffs and lab sizes.
-    Usage: /api/layoff-leaderboard?cost_per_researcher=200000&limit=20
-    """
+    """ Get institutions ranked by layoff risk. """
     try:
-        # Fetch both active and terminated grants
-        active_grants = await fetch_active_grants()
-        terminated_grants = await fetch_terminated_grants()
-        
-        if not active_grants:
-            return {
-                "error": "No active grant data available",
-                "note": "Cannot calculate layoff risk without current funding data"
-            }
-        
-        # Group by institution
-        institution_data = defaultdict(lambda: {
-            "active_grants": [],
-            "terminated_grants": [],
-            "total_active_funding": 0,
-            "total_terminated_funding": 0
-        })
-        
-        # Process active grants
-        for grant in active_grants:
-            org_info = grant.get("organization", {})
-            if isinstance(org_info, list) and len(org_info) > 0:
-                org_name = org_info[0].get("org_name", "Unknown")
-            elif isinstance(org_info, dict):
-                org_name = org_info.get("org_name", "Unknown")
-            else:
-                continue
-                
-            if org_name != "Unknown":
-                institution_data[org_name]["active_grants"].append(grant)
-                try:
-                    amount = float(grant.get("award_amount", 0))
-                    institution_data[org_name]["total_active_funding"] += amount
-                except (ValueError, TypeError):
-                    pass
-        
-        # Process terminated grants  
-        for grant in terminated_grants:
-            org_info = grant.get("organization", {})
-            if isinstance(org_info, list) and len(org_info) > 0:
-                org_name = org_info[0].get("org_name", "Unknown")
-            elif isinstance(org_info, dict):
-                org_name = org_info.get("org_name", "Unknown")
-            else:
-                continue
-                
-            if org_name in institution_data:
-                institution_data[org_name]["terminated_grants"].append(grant)
-                try:
-                    amount = float(grant.get("award_amount", 0))
-                    institution_data[org_name]["total_terminated_funding"] += amount
-                except (ValueError, TypeError):
-                    pass
-        
-        # Calculate risk scores for each institution
-        risk_rankings = []
-        
-        for institution, data in institution_data.items():
-            if data["total_active_funding"] < 100000:  # Skip institutions with minimal funding
-                continue
-                
-            # Calculate lab size and funding cliff
-            lab_size = estimate_lab_size(data["total_active_funding"], cost_per_researcher)
-            cliff_analysis = calculate_funding_cliff(data["active_grants"], months_ahead=12)
-            
-            # Calculate risk score (weighted combination of factors)
-            cliff_weight = cliff_analysis["cliff_percentage"] * 0.4  # 40% weight
-            terminated_weight = (data["total_terminated_funding"] / data["total_active_funding"] * 100) * 0.3 if data["total_active_funding"] > 0 else 0  # 30% weight
-            size_weight = min(lab_size["estimated_researchers"] * 2, 20)  # 20% weight, capped at 20
-            concentration_penalty = max(0, (3 - len(data["active_grants"])) * 5)  # 10% weight - penalty for few grants
-            
-            risk_score = cliff_weight + terminated_weight + size_weight + concentration_penalty
-            
-            at_risk_positions = cliff_analysis["expiring_funding"] / cost_per_researcher
-            recent_lost_positions = data["total_terminated_funding"] / cost_per_researcher
-            
-            risk_rankings.append({
-                "institution": institution,
-                "risk_score": round(risk_score, 1),
-                "estimated_lab_size": lab_size["estimated_researchers"],
-                "at_risk_positions": round(at_risk_positions, 1),
-                "recently_lost_positions": round(recent_lost_positions, 1),
-                "funding_cliff_percentage": cliff_analysis["cliff_percentage"],
-                "total_active_funding": data["total_active_funding"],
-                "active_grants_count": len(data["active_grants"]),
-                "terminated_grants_count": len(data["terminated_grants"]),
-                "risk_level": "CRITICAL" if risk_score > 70 else "HIGH" if risk_score > 50 else "MEDIUM" if risk_score > 30 else "LOW"
-            })
-        
-        # Sort by risk score (highest first)
-        risk_rankings.sort(key=lambda x: x["risk_score"], reverse=True)
-        
+        active = await fetch_active_grants()
+        terminated = await fetch_terminated_grants()
+        if not active:
+            return {"error": "No active grant data available", "note": "Cannot calculate layoff risk"}
+
+        # group and calculate
+        grouped = group_grants_by_institution(active, terminated)
+        rankings = []
+        for inst, data in grouped.items():
+            result = calculate_institution_risk(inst, data, cost_per_researcher)
+            if result:
+                rankings.append(result)
+
+        rankings.sort(key=lambda x: x["risk_score"], reverse=True)
+        top = rankings[:limit]
+
         return {
-            "data": risk_rankings[:limit],
-            "total_institutions": len(risk_rankings),
+            "data": top,
+            "total_institutions": len(rankings),
             "methodology": {
                 "risk_factors": [
                     "Funding cliff percentage (40% weight)",
@@ -890,9 +811,88 @@ async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit
             },
             "last_updated": datetime.now().isoformat()
         }
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating layoff risk leaderboard: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
+
+def group_grants_by_institution(active_grants, terminated_grants):
+    """
+    Group active and terminated grants by institution and sum funding.
+    Returns a dict mapping institution name to grant lists and funding totals.
+    """
+    institution_data = defaultdict(lambda: {
+        "active_grants": [],
+        "terminated_grants": [],
+        "total_active_funding": 0,
+        "total_terminated_funding": 0
+    })
+    
+    def extract_name(org_info):
+        if isinstance(org_info, list) and org_info:
+            return org_info[0].get("org_name", "Unknown")
+        if isinstance(org_info, dict):
+            return org_info.get("org_name", "Unknown")
+        return "Unknown"
+
+    for grant in active_grants:
+        name = extract_name(grant.get("organization", {}))
+        if name != "Unknown":
+            institution_data[name]["active_grants"].append(grant)
+            try:
+                institution_data[name]["total_active_funding"] += float(grant.get("award_amount", 0))
+            except (ValueError, TypeError):
+                pass
+
+    for grant in terminated_grants:
+        name = extract_name(grant.get("organization", {}))
+        if name in institution_data:
+            institution_data[name]["terminated_grants"].append(grant)
+            try:
+                institution_data[name]["total_terminated_funding"] += float(grant.get("award_amount", 0))
+            except (ValueError, TypeError):
+                pass
+
+    return institution_data
+
+
+def calculate_institution_risk(institution, data, cost_per_researcher):
+    """
+    Calculate layoff risk metrics for one institution.
+    Returns a dict of summarized risk values or None if skipped.
+    """
+    if data["total_active_funding"] < 100000:
+        return None
+
+    lab = estimate_lab_size(data["total_active_funding"], cost_per_researcher)
+    cliff = calculate_funding_cliff(data["active_grants"], months_ahead=12)
+
+    cliff_weight = cliff["cliff_percentage"] * 0.4
+    term_weight = (data["total_terminated_funding"] / data["total_active_funding"] * 100) * 0.3 if data["total_active_funding"] > 0 else 0
+    size_weight = min(lab["estimated_researchers"] * 2, 20)
+    penalty = max(0, (3 - len(data["active_grants"])) * 5)
+
+    score = cliff_weight + term_weight + size_weight + penalty
+    at_risk = cliff["expiring_funding"] / cost_per_researcher
+    lost = data["total_terminated_funding"] / cost_per_researcher
+
+    level = (
+        "CRITICAL" if score > 70 else
+        "HIGH" if score > 50 else
+        "MEDIUM" if score > 30 else
+        "LOW"
+    )
+
+    return {
+        "institution": institution,
+        "risk_score": round(score, 1),
+        "estimated_lab_size": lab["estimated_researchers"],
+        "at_risk_positions": round(at_risk, 1),
+        "recently_lost_positions": round(lost, 1),
+        "funding_cliff_percentage": cliff["cliff_percentage"],
+        "total_active_funding": data["total_active_funding"],
+        "active_grants_count": len(data["active_grants"]),
+        "terminated_grants_count": len(data["terminated_grants"]),
+        "risk_level": level
+    }
 
 if __name__ == "__main__":
     import uvicorn
