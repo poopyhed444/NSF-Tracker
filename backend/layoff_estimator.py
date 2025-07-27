@@ -14,98 +14,187 @@ from department_costs import (
     get_department_risk_multiplier,
     calculate_department_adjusted_lab_size
 )
+from grant_cache import (
+    get_nih_cache, save_nih_cache,
+    get_nsf_cache, save_nsf_cache,
+    get_combined_cache, save_combined_cache
+)
 
 # API endpoints
 NIH_API_URL = "https://api.reporter.nih.gov/v2/projects/search"
 NSF_API_URL = "https://www.research.gov/awardapi-service/v1/awards.json"
 
-async def fetch_active_grants(organization: str = None, pi_name: str = None) -> List[Dict[str, Any]]:
-    """Fetch currently active grants for analysis."""
+async def fetch_active_grants(organization: str = None, pi_name: str = None, use_cache: bool = True, max_records: int = 5000) -> List[Dict[str, Any]]:
+    """
+    Fetch currently active grants for analysis with caching support.
+    
+    Args:
+        organization: Filter by organization name
+        pi_name: Filter by PI name
+        use_cache: Whether to use cached data if available
+        max_records: Maximum number of records to fetch (will paginate)
+    """
+    # Check cache first
+    if use_cache and organization is None and pi_name is None:
+        cached_data = get_nih_cache()
+        if cached_data:
+            return cached_data
+    
+    print(f"Fetching NIH grants (max: {max_records})...")
+    
     end_date = datetime.now() + timedelta(days=365)  # Look ahead 1 year
     start_date = datetime.now() - timedelta(days=30)   # Started recently or ongoing
     
-    search_criteria = {
-        "criteria": {
-            "project_start_date": {
-                "from_date": start_date.strftime("%Y-%m-%d"),
-                "to_date": end_date.strftime("%Y-%m-%d")
-            }
-        },
-        "include_fields": [
-            "Organization",
-            "ProjectTitle", 
-            "ProjectEndDate",
-            "ProjectStartDate",
-            "AwardAmount",
-            "FiscalYear",
-            "ContactPiName"
-        ],
-        "offset": 0,
-        "limit": 500
-    }
+    all_grants = []
+    batch_size = 500  # NIH API limit per request
+    offset = 0
     
-    # Add filters if specified
-    if organization:
-        search_criteria["criteria"]["organization"] = organization
-    if pi_name:
-        search_criteria["criteria"]["pi_names"] = [pi_name]
+    while len(all_grants) < max_records:
+        current_batch_size = min(batch_size, max_records - len(all_grants))
+        
+        search_criteria = {
+            "criteria": {
+                "project_start_date": {
+                    "from_date": start_date.strftime("%Y-%m-%d"),
+                    "to_date": end_date.strftime("%Y-%m-%d")
+                }
+            },
+            "include_fields": [
+                "Organization",
+                "ProjectTitle", 
+                "ProjectEndDate",
+                "ProjectStartDate",
+                "AwardAmount",
+                "FiscalYear",
+                "ContactPiName"
+            ],
+            "offset": offset,
+            "limit": current_batch_size
+        }
+        
+        # Add filters if specified
+        if organization:
+            search_criteria["criteria"]["organization"] = organization
+        if pi_name:
+            search_criteria["criteria"]["pi_names"] = [pi_name]
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                response = await client.post(NIH_API_URL, json=search_criteria)
+                response.raise_for_status()
+                data = response.json()
+                batch_results = data.get("results", [])
+                
+                if not batch_results:
+                    print(f"No more results at offset {offset}")
+                    break
+                
+                all_grants.extend(batch_results)
+                print(f"Fetched batch {offset//batch_size + 1}: {len(batch_results)} grants (total: {len(all_grants)})")
+                
+                # If we got fewer results than requested, we've reached the end
+                if len(batch_results) < current_batch_size:
+                    break
+                
+                offset += batch_size
+                
+            except Exception as e:
+                print(f"Error fetching NIH grants at offset {offset}: {e}")
+                break
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(NIH_API_URL, json=search_criteria)
-            response.raise_for_status()
-            data = response.json()
-            print(f"Fetched {len(data.get('results', []))} active grants from NIH API")
-            return data.get("results", [])
-        except Exception as e:
-            print(f"Error fetching active grants: {e}")
-            return []
+    print(f"Total NIH grants fetched: {len(all_grants)}")
+    
+    # Cache the results if we fetched without filters
+    if use_cache and organization is None and pi_name is None:
+        save_nih_cache(all_grants, {"max_records": max_records, "total_fetched": len(all_grants)})
+    
+    return all_grants
 
-async def fetch_nsf_grants(organization: str = None, pi_name: str = None, active_only: bool = True) -> List[Dict[str, Any]]:
+async def fetch_nsf_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records: int = 5000) -> List[Dict[str, Any]]:
     """
-    Fetch NSF awards using the NSF Award Search API.
+    Fetch NSF awards using the NSF Award Search API with caching support.
     Maps NSF data structure to align with NIH grant format for consistency.
+    
+    Args:
+        organization: Filter by organization name  
+        pi_name: Filter by PI name
+        active_only: Only fetch active grants
+        use_cache: Whether to use cached data if available
+        max_records: Maximum number of records to fetch (will paginate)
     """
-    # Build query parameters
-    params = {
-        "printFields": "id,title,startDate,expDate,fundsObligatedAmt,awardeeName,pdPIName,agency,fundProgramName",
-        "offset": "1",
-        "rpp": "500"  # Results per page
-    }
+    # Check cache first
+    if use_cache and organization is None and pi_name is None:
+        cached_data = get_nsf_cache()
+        if cached_data:
+            return cached_data
     
-    # Add filters
-    if organization:
-        params["awardeeState"] = organization  # NSF uses state-based org filtering
-    if pi_name:
-        params["pdPIName"] = pi_name
+    print(f"Fetching NSF grants (max: {max_records})...")
     
-    # Filter for active grants if requested
-    if active_only:
-        current_year = datetime.now().year
-        params["startDateStart"] = f"01/01/{current_year-2}"  # Last 2 years
-        params["expDateStart"] = datetime.now().strftime("%m/%d/%Y")  # Not yet expired
+    all_grants = []
+    batch_size = 500  # NSF API limit per request
+    offset = 1  # NSF uses 1-based indexing
     
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-        try:
-            response = await client.get(NSF_API_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            nsf_awards = data.get("response", {}).get("award", [])
-            print(f"Fetched {len(nsf_awards)} NSF awards")
-            
-            # Map NSF data structure to NIH-compatible format
-            mapped_grants = []
-            for award in nsf_awards:
-                mapped_grant = _map_nsf_to_nih_format(award)
-                if mapped_grant:
-                    mapped_grants.append(mapped_grant)
-            
-            return mapped_grants
-            
-        except Exception as e:
-            print(f"Error fetching NSF grants: {e}")
-            return []
+    while len(all_grants) < max_records:
+        current_batch_size = min(batch_size, max_records - len(all_grants))
+        
+        # Build query parameters
+        params = {
+            "printFields": "id,title,startDate,expDate,fundsObligatedAmt,awardeeName,pdPIName,agency,fundProgramName",
+            "offset": str(offset),
+            "rpp": str(current_batch_size)
+        }
+        
+        # Add filters
+        if organization:
+            params["awardeeState"] = organization  # NSF uses state-based org filtering
+        if pi_name:
+            params["pdPIName"] = pi_name
+        
+        # Filter for active grants if requested
+        if active_only:
+            current_year = datetime.now().year
+            params["startDateStart"] = f"01/01/{current_year-2}"  # Last 2 years
+            params["expDateStart"] = datetime.now().strftime("%m/%d/%Y")  # Not yet expired
+        
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            try:
+                response = await client.get(NSF_API_URL, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                nsf_awards = data.get("response", {}).get("award", [])
+                
+                if not nsf_awards:
+                    print(f"No more NSF results at offset {offset}")
+                    break
+                
+                # Map NSF data structure to NIH-compatible format
+                batch_mapped = []
+                for award in nsf_awards:
+                    mapped_grant = _map_nsf_to_nih_format(award)
+                    if mapped_grant:
+                        batch_mapped.append(mapped_grant)
+                
+                all_grants.extend(batch_mapped)
+                print(f"Fetched NSF batch {(offset-1)//batch_size + 1}: {len(batch_mapped)} grants (total: {len(all_grants)})")
+                
+                # If we got fewer results than requested, we've reached the end
+                if len(nsf_awards) < current_batch_size:
+                    break
+                
+                offset += batch_size
+                
+            except Exception as e:
+                print(f"Error fetching NSF grants at offset {offset}: {e}")
+                break
+    
+    print(f"Total NSF grants fetched: {len(all_grants)}")
+    
+    # Cache the results if we fetched without filters
+    if use_cache and organization is None and pi_name is None:
+        save_nsf_cache(all_grants, {"max_records": max_records, "total_fetched": len(all_grants)})
+    
+    return all_grants
 
 def _map_nsf_to_nih_format(nsf_award: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -187,21 +276,53 @@ def _extract_fiscal_year(date_str: str) -> int:
     except (ValueError, IndexError):
         return datetime.now().year
 
-async def fetch_combined_grants(organization: str = None, pi_name: str = None, active_only: bool = True) -> List[Dict[str, Any]]:
+async def fetch_combined_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records_per_source: int = 5000) -> List[Dict[str, Any]]:
     """
-    Fetch and combine grants from both NIH and NSF sources.
+    Fetch and combine grants from both NIH and NSF sources with caching support.
     Returns a unified list of grants in consistent format.
+    
+    Args:
+        organization: Filter by organization name
+        pi_name: Filter by PI name  
+        active_only: Only fetch active grants
+        use_cache: Whether to use cached data if available
+        max_records_per_source: Maximum records to fetch from each source
     """
+    # Check combined cache first if no filters
+    if use_cache and organization is None and pi_name is None:
+        cached_data = get_combined_cache()
+        if cached_data:
+            nih_count = len([g for g in cached_data if g.get("funding_agency") == "NIH"])
+            nsf_count = len([g for g in cached_data if g.get("funding_agency") == "NSF"])
+            print(f"Loaded {len(cached_data)} grants from cache ({nih_count} NIH + {nsf_count} NSF)")
+            return cached_data
+    
     print("Fetching grants from NIH and NSF...")
     
-    # Fetch from both sources concurrently
+    # Fetch from both sources concurrently or sequentially based on filters
     if active_only:
-        nih_grants = await fetch_active_grants(organization=organization, pi_name=pi_name)
+        nih_grants = await fetch_active_grants(
+            organization=organization, 
+            pi_name=pi_name, 
+            use_cache=use_cache, 
+            max_records=max_records_per_source
+        )
     else:
         # For terminated grants, we'll need a different NIH function
-        nih_grants = await fetch_active_grants(organization=organization, pi_name=pi_name)
+        nih_grants = await fetch_active_grants(
+            organization=organization, 
+            pi_name=pi_name, 
+            use_cache=use_cache, 
+            max_records=max_records_per_source
+        )
     
-    nsf_grants = await fetch_nsf_grants(organization=organization, pi_name=pi_name, active_only=active_only)
+    nsf_grants = await fetch_nsf_grants(
+        organization=organization, 
+        pi_name=pi_name, 
+        active_only=active_only, 
+        use_cache=use_cache, 
+        max_records=max_records_per_source
+    )
     
     # Combine and tag sources
     all_grants = []
@@ -215,6 +336,15 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
     all_grants.extend(nsf_grants)
     
     print(f"Combined total: {len(all_grants)} grants ({len(nih_grants)} NIH + {len(nsf_grants)} NSF)")
+    
+    # Cache the combined results if we fetched without filters
+    if use_cache and organization is None and pi_name is None:
+        save_combined_cache(all_grants, {
+            "nih_count": len(nih_grants),
+            "nsf_count": len(nsf_grants),
+            "total_count": len(all_grants),
+            "max_records_per_source": max_records_per_source
+        })
     
     return all_grants
 
@@ -492,13 +622,89 @@ def _assess_primary_risk_factor(active_grants: List[Dict], cliff_analysis: Dict,
     
     return "Normal"
 
+async def fetch_terminated_grants() -> List[Dict[str, Any]]:
+    """Fetch recently terminated grants for analysis (NIH only)."""
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=365)
+    
+    search_criteria = {
+        "criteria": {
+            "project_end_date": {
+                "from_date": start_date.strftime("%Y-%m-%d"),
+                "to_date": end_date.strftime("%Y-%m-%d")
+            }
+        },
+        "include_fields": [
+            "Organization",
+            "ProjectTitle",
+            "ProjectEndDate",
+            "ProjectStartDate",
+            "AwardAmount",
+            "FiscalYear",
+            "ContactPiName"
+        ],
+        "offset": 0,
+        "limit": 500
+    }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(NIH_API_URL, json=search_criteria)
+            response.raise_for_status()
+            data = response.json()
+            print(f"Fetched {len(data.get('results', []))} terminated grants from NIH API")
+            return data.get("results", [])
+        except httpx.RequestError as e:
+            print(f"Error fetching terminated grants: {e}")
+            return []
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error fetching terminated grants: {e}")
+            return []
+
+def normalize_institution_name(name: str) -> str:
+    """
+    Normalize institution names for better matching between NIH and NSF data.
+    """
+    if not name:
+        return "Unknown"
+    
+    # Convert to title case
+    normalized = name.title()
+    
+    # Remove common suffixes that differ between agencies
+    suffixes_to_remove = [
+        " Research Corporation",
+        " Research Foundation", 
+        " Medical Campus",
+        " Health Sciences Center",
+        " Health Scis Ctr",
+        " Medical Center",
+        " Med Ctr"
+    ]
+    
+    for suffix in suffixes_to_remove:
+        if normalized.endswith(suffix):
+            normalized = normalized[:-len(suffix)].strip()
+    
+    # Handle common abbreviations
+    replacements = {
+        "Univ": "University",
+        "Coll": "College", 
+        "Inst": "Institute",
+        "Tech": "Technology"
+    }
+    
+    for abbrev, full in replacements.items():
+        normalized = normalized.replace(f" {abbrev} ", f" {full} ")
+        normalized = normalized.replace(f" {abbrev}.", f" {full}")
+    
+    return normalized
+
 async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20) -> Dict[str, Any]:
     """
     Get institutions ranked by layoff risk based on funding cliffs and lab sizes.
     Now includes both NIH and NSF funding data.
     """
-    from main import fetch_terminated_grants  # Import to avoid circular imports
-    
     # Fetch both active and terminated grants (NIH + NSF for active, NIH only for terminated)
     active_grants = await fetch_combined_grants(active_only=True)
     terminated_grants = await fetch_terminated_grants()
@@ -529,17 +735,20 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
         else:
             continue
             
-        if org_name != "Unknown":
-            institution_data[org_name]["active_grants"].append(grant)
+        # Normalize institution name for better matching
+        normalized_name = normalize_institution_name(org_name)
+        
+        if normalized_name != "Unknown":
+            institution_data[normalized_name]["active_grants"].append(grant)
             try:
                 amount = float(grant.get("award_amount", 0))
-                institution_data[org_name]["total_active_funding"] += amount
+                institution_data[normalized_name]["total_active_funding"] += amount
                 
                 # Track funding by agency
                 if grant.get("funding_agency") == "NIH":
-                    institution_data[org_name]["nih_funding"] += amount
+                    institution_data[normalized_name]["nih_funding"] += amount
                 elif grant.get("funding_agency") == "NSF":
-                    institution_data[org_name]["nsf_funding"] += amount
+                    institution_data[normalized_name]["nsf_funding"] += amount
                     
             except (ValueError, TypeError):
                 pass
@@ -554,11 +763,14 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
         else:
             continue
             
-        if org_name in institution_data:
-            institution_data[org_name]["terminated_grants"].append(grant)
+        # Normalize institution name for matching
+        normalized_name = normalize_institution_name(org_name)
+        
+        if normalized_name in institution_data:
+            institution_data[normalized_name]["terminated_grants"].append(grant)
             try:
                 amount = float(grant.get("award_amount", 0))
-                institution_data[org_name]["total_terminated_funding"] += amount
+                institution_data[normalized_name]["total_terminated_funding"] += amount
             except (ValueError, TypeError):
                 pass
     

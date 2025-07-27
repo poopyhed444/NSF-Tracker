@@ -10,6 +10,7 @@ from collections import defaultdict
 from pi_department_lookup import get_pi_department
 from scibert_classifier import predict_department_scibert, train_classifier
 from layoff_api import layoff_router
+from grant_cache import get_cache_status, clear_cache
 
 app = FastAPI(title="NIH/NSF At-Risk Labs Tracker", version="1.0.0")
 
@@ -538,46 +539,9 @@ async def _refresh_unknown_pis_impl():
         raise HTTPException(status_code=500, detail=f"Error refreshing unknowns: {str(e)}")
 
 async def fetch_active_grants(organization: str = None, pi_name: str = None) -> List[Dict[str, Any]]:
-    """Fetch currently active grants for analysis."""
-    end_date = datetime.now() + timedelta(days=365)  # Look ahead 1 year
-    start_date = datetime.now() - timedelta(days=30)   # Started recently or ongoing
-    
-    search_criteria = {
-        "criteria": {
-            "project_start_date": {
-                "from_date": start_date.strftime("%Y-%m-%d"),
-                "to_date": end_date.strftime("%Y-%m-%d")
-            }
-        },
-        "include_fields": [
-            "Organization",
-            "ProjectTitle", 
-            "ProjectEndDate",
-            "ProjectStartDate",
-            "AwardAmount",
-            "FiscalYear",
-            "ContactPiName"
-        ],
-        "offset": 0,
-        "limit": 500
-    }
-    
-    # Add filters if specified
-    if organization:
-        search_criteria["criteria"]["organization"] = organization
-    if pi_name:
-        search_criteria["criteria"]["pi_names"] = [pi_name]
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(NIH_API_URL, json=search_criteria)
-            response.raise_for_status()
-            data = response.json()
-            print(f"Fetched {len(data.get('results', []))} active grants from NIH API")
-            return data.get("results", [])
-        except Exception as e:
-            print(f"Error fetching active grants: {e}")
-            return []
+    """Fetch currently active grants for analysis - now includes both NIH and NSF."""
+    from layoff_estimator import fetch_combined_grants
+    return await fetch_combined_grants(organization=organization, pi_name=pi_name, active_only=True)
 
 def estimate_lab_size(total_annual_funding: float, cost_per_researcher: float = 200000) -> Dict[str, Any]:
     """
@@ -646,6 +610,57 @@ def calculate_funding_cliff(grants: List[Dict[str, Any]], months_ahead: int = 12
         "expiring_grants": expiring_grants,
         "months_ahead": months_ahead
     }
+
+# Grant Cache Management Endpoints
+@app.get("/api/grant-cache/status")
+async def get_grant_cache_status():
+    """Get status of grant data cache."""
+    try:
+        status = get_cache_status()
+        return {
+            "cache_status": status,
+            "cache_duration_hours": 6,
+            "description": "Cache status for NIH, NSF, and combined grant data"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting cache status: {str(e)}")
+
+@app.post("/api/grant-cache/clear")
+async def clear_grant_cache():
+    """Clear all grant data cache."""
+    try:
+        clear_cache()
+        return {"message": "Grant cache cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+
+@app.post("/api/grant-cache/refresh")
+async def refresh_grant_cache(max_records_per_source: int = 10000):
+    """Force refresh of grant data cache with more records."""
+    try:
+        from layoff_estimator import fetch_combined_grants
+        
+        # Clear existing cache and fetch fresh data
+        clear_cache()
+        
+        # Fetch with higher limits and force no cache usage
+        grants = await fetch_combined_grants(
+            use_cache=False, 
+            max_records_per_source=max_records_per_source
+        )
+        
+        nih_count = len([g for g in grants if g.get("funding_agency") == "NIH"])
+        nsf_count = len([g for g in grants if g.get("funding_agency") == "NSF"])
+        
+        return {
+            "message": "Grant cache refreshed successfully",
+            "total_grants": len(grants),
+            "nih_grants": nih_count,
+            "nsf_grants": nsf_count,
+            "max_records_per_source": max_records_per_source
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
 
 @app.get("/api/lab-size-estimator")
 async def estimate_lab_impact(institution: str, cost_per_researcher: float = 200000):
@@ -776,41 +791,32 @@ async def analyze_pi_lab(pi_name: str, institution: str, cost_per_researcher: fl
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analyzing PI lab: {str(e)}")
 
+@app.get("/api/test-combined-grants")
+async def test_combined_grants_endpoint():
+    """Test endpoint to verify NIH + NSF grant fetching."""
+    try:
+        from layoff_estimator import fetch_combined_grants
+        grants = await fetch_combined_grants(active_only=True)
+        
+        nih_count = sum(1 for g in grants if g.get("funding_agency") == "NIH")
+        nsf_count = sum(1 for g in grants if g.get("funding_agency") == "NSF")
+        
+        return {
+            "status": "success",
+            "total_grants": len(grants),
+            "nih_grants": nih_count,
+            "nsf_grants": nsf_count,
+            "sample_grants": grants[:3] if grants else []
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error testing combined grants: {str(e)}")
+
 @app.get("/api/layoff-leaderboard")
 async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20):
-    """ Get institutions ranked by layoff risk. """
+    """ Get institutions ranked by layoff risk using combined NIH+NSF data. """
     try:
-        active = await fetch_active_grants()
-        terminated = await fetch_terminated_grants()
-        if not active:
-            return {"error": "No active grant data available", "note": "Cannot calculate layoff risk"}
-
-        # group and calculate
-        grouped = group_grants_by_institution(active, terminated)
-        rankings = []
-        for inst, data in grouped.items():
-            result = calculate_institution_risk(inst, data, cost_per_researcher)
-            if result:
-                rankings.append(result)
-
-        rankings.sort(key=lambda x: x["risk_score"], reverse=True)
-        top = rankings[:limit]
-
-        return {
-            "data": top,
-            "total_institutions": len(rankings),
-            "methodology": {
-                "risk_factors": [
-                    "Funding cliff percentage (40% weight)",
-                    "Recent funding loss ratio (30% weight)", 
-                    "Lab size impact (20% weight)",
-                    "Grant concentration penalty (10% weight)"
-                ],
-                "cost_per_researcher": cost_per_researcher,
-                "analysis_window": "12 months ahead"
-            },
-            "last_updated": datetime.now().isoformat()
-        }
+        from layoff_estimator import generate_layoff_risk_leaderboard
+        return await generate_layoff_risk_leaderboard(cost_per_researcher, limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
 

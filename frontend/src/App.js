@@ -102,6 +102,82 @@ function App() {
     document.body.removeChild(link);
   };
 
+  const exportAllToCSV = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all data with a high limit
+      const response = await axios.get('/api/layoff-leaderboard?limit=1000');
+      const allData = response.data;
+
+      if (!allData?.data) {
+        alert('No data available for export');
+        return;
+      }
+
+      const headers = [
+        'Institution',
+        'Risk Level',
+        'Risk Score',
+        'At-Risk Positions',
+        'Recently Lost Positions',
+        'Total Lab Size',
+        'Funding Cliff %',
+        'Active Funding',
+        'Active Grants Count',
+        'Terminated Grants Count',
+        'Top Departments',
+        'NIH Funding',
+        'NSF Funding',
+        'NIH Percentage',
+        'NSF Percentage'
+      ];
+
+      const csvData = allData.data.map(institution => [
+        institution.institution,
+        institution.risk_level,
+        institution.risk_score,
+        institution.at_risk_positions,
+        institution.recently_lost_positions,
+        institution.estimated_lab_size,
+        institution.funding_cliff_percentage,
+        institution.total_active_funding,
+        institution.active_grants_count,
+        institution.terminated_grants_count,
+        institution.top_departments?.map(d => `${d.department} (${d.percentage}%)`).join('; ') || '',
+        institution.funding_diversification?.nih_funding || 0,
+        institution.funding_diversification?.nsf_funding || 0,
+        institution.funding_diversification?.nih_percentage || 0,
+        institution.funding_diversification?.nsf_percentage || 0
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => row.map(cell => 
+          typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell
+        ).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `complete-layoff-risk-analysis-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(`Successfully exported ${allData.data.length} institutions to CSV`);
+
+    } catch (err) {
+      console.error('Error exporting full data:', err);
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const InstitutionCard = ({ institution }) => {
     const nihPercentage = institution.funding_diversification?.nih_percentage || 0;
     const nsfPercentage = institution.funding_diversification?.nsf_percentage || 0;
@@ -249,24 +325,46 @@ function App() {
           {loading ? 'Refreshing...' : '🔄 Refresh Data'}
         </button>
 
-        <button 
-          onClick={exportToCSV}
-          className="export-button"
-          disabled={!leaderboardData?.data || loading}
-          style={{
-            padding: '10px 20px',
-            background: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: leaderboardData?.data ? 'pointer' : 'not-allowed',
-            fontSize: '14px',
-            fontWeight: '500',
-            opacity: leaderboardData?.data ? 1 : 0.6
-          }}
-        >
-          📊 Export to CSV
-        </button>
+        <div className="export-controls">
+          <button 
+            onClick={exportToCSV}
+            className="export-button"
+            disabled={!leaderboardData?.data || loading}
+            style={{
+              padding: '10px 20px',
+              background: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: leaderboardData?.data ? 'pointer' : 'not-allowed',
+              fontSize: '14px',
+              fontWeight: '500',
+              opacity: leaderboardData?.data ? 1 : 0.6,
+              marginRight: '10px'
+            }}
+          >
+            📊 Export Current View
+          </button>
+
+          <button 
+            onClick={exportAllToCSV}
+            className="export-all-button"
+            disabled={loading}
+            style={{
+              padding: '10px 20px',
+              background: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
+            📈 Export All Data
+          </button>
+        </div>
       </div>
 
       <div className="leaderboard">
