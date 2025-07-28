@@ -703,11 +703,14 @@ def normalize_institution_name(name: str) -> str:
 async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20) -> Dict[str, Any]:
     """
     Get institutions ranked by layoff risk based on funding cliffs and lab sizes.
-    Now includes both NIH and NSF funding data.
+    Analyzes NIH and NSF funding data to assess institutional risk.
     """
-    # Fetch both active and terminated grants (NIH + NSF for active, NIH only for terminated)
+    # Fetch NIH + NSF grants and federal agency grants
     active_grants = await fetch_combined_grants(active_only=True)
     terminated_grants = await fetch_terminated_grants()
+    
+    # Note: Federal agency integration removed to focus on real NIH/NSF data
+    federal_grants = []
     
     if not active_grants:
         return {
@@ -817,9 +820,18 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
         lab_size = estimate_lab_size(total_funding, weighted_cost)
         cliff_analysis = calculate_funding_cliff(data["active_grants"], months_ahead=12)
         
-        # Calculate funding diversification bonus (NIH + NSF is lower risk)
-        has_both_agencies = data["nih_funding"] > 0 and data["nsf_funding"] > 0
-        diversification_bonus = 0.9 if has_both_agencies else 1.0  # 10% risk reduction for dual agency funding
+        # Calculate funding diversification bonus (NIH + NSF agencies)
+        agencies_with_funding = 0
+        if data["nih_funding"] > 0:
+            agencies_with_funding += 1
+        if data["nsf_funding"] > 0:
+            agencies_with_funding += 1
+        
+        # Risk reduction for diversification (NIH + NSF = 10% reduction)
+        if agencies_with_funding >= 2:
+            diversification_bonus = 0.9  # 10% risk reduction for both agencies
+        else:
+            diversification_bonus = 1.0  # No reduction for single agency
         
         # Calculate risk score (weighted combination of factors)
         cliff_weight = cliff_analysis["cliff_percentage"] * 0.4  # 40% weight
@@ -858,7 +870,7 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
                 "nsf_funding": data["nsf_funding"],
                 "nih_percentage": round(data["nih_funding"] / total_funding * 100, 1) if total_funding > 0 else 0,
                 "nsf_percentage": round(data["nsf_funding"] / total_funding * 100, 1) if total_funding > 0 else 0,
-                "has_both_agencies": has_both_agencies,
+                "agencies_with_funding": agencies_with_funding,
                 "diversification_bonus": round((1 - diversification_bonus) * 100, 1)  # Show as percentage reduction
             },
             "top_departments": [
@@ -886,7 +898,11 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
                 "Lab size impact (20% weight)",
                 "Grant concentration penalty (10% weight)",
                 "Department-specific risk multipliers",
-                "Agency diversification bonus (10% risk reduction for NIH+NSF)"
+                "Multi-agency diversification bonus (up to 20% risk reduction)"
+            ],
+            "diversification_tiers": [
+                "Single agency: No risk reduction",
+                "2 agencies (NIH + NSF): 10% risk reduction"
             ],
             "cost_calculation": "Weighted average based on department composition",
             "department_costs": "Department-specific cost per researcher models",
