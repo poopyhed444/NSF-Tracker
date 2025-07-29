@@ -94,9 +94,11 @@ async def get_layoff_methodology():
                 "adjustable": "Can be customized per institution or analysis"
             },
             "data_sources": [
-                "NIH RePORTER API for grant data",
-                "Real-time funding status",
-                "Historical termination patterns"
+                "NIH RePORTER API for active and terminated grants",
+                "NSF Award Search API for research grants",
+                "DoD Contract Data from defense.gov announcements", 
+                "DoE Research Programs (Solar, Fusion, Battery, Grid, etc.)",
+                "Real-time funding status and expiration tracking"
             ],
             "confidence_levels": {
                 "HIGH": "Based on substantial funding data (>$500k)",

@@ -902,4 +902,7 @@ def calculate_institution_risk(institution, data, cost_per_researcher):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8001)
+    uvicorn.run(app, host="localhost", port=8000)
+
+Monday, July 28, 2025 11:25:05 PM
+
