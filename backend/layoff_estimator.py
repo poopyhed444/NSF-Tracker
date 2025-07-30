@@ -8,6 +8,7 @@ based on grant funding analysis, funding cliffs, and historical data.
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import httpx
+import re
 from collections import defaultdict
 from department_costs import (
     get_department_cost_per_researcher, 
@@ -376,172 +377,80 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
 
 async def fetch_dod_grants(organization: str = None, pi_name: str = None, active_only: bool = True, max_records: int = 1000) -> List[Dict[str, Any]]:
     """
-    Scrape real DoD contract data from defense.gov and return in NIH-compatible format.
+    Fetch DoD university grants from USASpending API.
     """
-    import re
-    import asyncio
-    import aiohttp
-    from datetime import datetime, timedelta
+    from federal_agency_integrator import FederalAgencyIntegrator
     
-    print(f"Fetching DoD grants (max: {max_records})...")
-    grants = []
+    print(f"Fetching DoD grants from USASpending API (max: {max_records})...")
     
     try:
-        # Get recent contract announcements (last 7 days)
-        base_url = "https://www.defense.gov/News/Contracts/"
-        contract_urls = []
+        integrator = FederalAgencyIntegrator()
         
-        # Generate URLs for recent contract announcements
-        for days_back in range(7):
-            article_id = 4257577 - days_back  # Approximate recent article IDs
-            contract_urls.append(f"https://www.defense.gov/News/Contracts/Contract/Article/{article_id}/")
+        # Fetch DoD research awards using USASpending API
+        federal_data = await integrator.get_comprehensive_federal_data(
+            agencies=['DOD'],
+            include_opportunities=False,
+            include_awards=True
+        )
         
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            for url in contract_urls[:3]:  # Limit to 3 recent days to avoid rate limiting
-                try:
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            content = await response.text()
-                            university_contracts = _extract_university_contracts_from_dod(content)
-                            grants.extend(university_contracts)
-                            await asyncio.sleep(1)  # Rate limiting
-                except Exception as e:
-                    print(f"Error fetching DoD contracts from {url}: {e}")
-                    continue
-    
+        dod_awards = federal_data.get('awards', [])
+        
+        # Convert to standard format expected by our system
+        grants = []
+        for award in dod_awards:
+            # Map from federal_agency_integrator format to our standard format
+            grant = {
+                "award_amount": award.get("award_amount", 0),
+                "contact_pi_name": "Unknown",  # USASpending doesn't typically include PI names
+                "project_title": award.get("description", award.get("project_title", "")),
+                "project_start_date": award.get("start_date", ""),
+                "project_end_date": award.get("end_date", ""),
+                "organization": [{
+                    "org_name": award.get("recipient_name", "Unknown"),
+                    "org_dept": None
+                }],
+                "fiscal_year": _extract_fiscal_year(award.get("start_date", "")),
+                "funding_agency": "DoD",
+                "is_active": True,  # Default to active, will be filtered later if needed
+                "award_id": award.get("award_id", ""),
+                "awarding_agency": award.get("awarding_agency", "Department of Defense"),
+                "sub_agency": award.get("sub_agency", ""),
+                "award_type": award.get("award_type", ""),
+                "source": "USASpending API"
+            }
+            grants.append(grant)
+        
+        # Filter by organization if specified
+        if organization:
+            normalized_org = integrator.normalize_institution_name(organization)
+            grants = [g for g in grants if normalized_org.lower() in integrator.normalize_institution_name(g["organization"][0]["org_name"]).lower()]
+        
+        # Filter by PI name if specified (unlikely to match since USASpending doesn't include PIs)
+        if pi_name:
+            grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
+        
+        # Filter active grants if specified
+        if active_only:
+            grants = [g for g in grants if g.get("is_active", True)]
+        
+        print(f"Total DoD grants fetched: {len(grants)}")
+        return grants[:max_records]
+        
     except Exception as e:
-        print(f"Error in DoD contract scraping: {e}")
-        
-    # If no real data found, use enhanced sample data
-    if not grants:
-        print("No real DoD university contracts found, using enhanced sample data")
+        print(f"Error fetching DoD grants from USASpending API: {e}")
+        # Fallback to sample data if API fails
+        print("Using enhanced sample data as fallback")
         grants = _get_enhanced_dod_sample_grants()
-    
-    # Filter by organization if specified
-    if organization:
-        grants = [g for g in grants if organization.lower() in g["organization"][0]["org_name"].lower()]
-    
-    # Filter by PI name if specified  
-    if pi_name:
-        grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
-    
-    # Filter active grants if specified
-    if active_only:
-        grants = [g for g in grants if g.get("is_active", True)]
-    
-    print(f"Total DoD grants fetched: {len(grants)}")
-    return grants[:max_records]
-
-def _extract_university_contracts_from_dod(html_content: str) -> List[Dict[str, Any]]:
-    """Extract university contracts from DoD contract announcements."""
-    import re
-    from datetime import datetime, timedelta
-    
-    contracts = []
-    
-    # Look for university/college mentions in contract text
-    university_patterns = [
-        r'University of ([^,\n.]+)',
-        r'([^,\n.]*University[^,\n.]*)',
-        r'([^,\n.]*College[^,\n.]*)',
-        r'([^,\n.]*Institute of Technology[^,\n.]*)',
-        r'([^,\n.]*Technical Institute[^,\n.]*)'
-    ]
-    
-    # Extract contract amounts
-    amount_pattern = r'\$([0-9,]+(?:\.[0-9]+)?(?:\s*(?:million|billion))?)'
-    
-    # Split content into individual contract blocks
-    contract_blocks = re.split(r'\n\n(?=[A-Z])', html_content)
-    
-    for block in contract_blocks:
-        for pattern in university_patterns:
-            matches = re.finditer(pattern, block, re.IGNORECASE)
-            for match in matches:
-                org_name = match.group(1) if match.lastindex and match.lastindex >= 1 else match.group(0)
-                org_name = _normalize_university_name(org_name.strip())
-                
-                # Skip if it's not actually a university
-                if not _is_university_name(org_name):
-                    continue
-                
-                # Extract amount from the same block
-                amount_match = re.search(amount_pattern, block)
-                amount = 0
-                if amount_match:
-                    amount_str = amount_match.group(1).replace(',', '')
-                    try:
-                        if 'million' in amount_str.lower():
-                            amount = float(amount_str.lower().replace('million', '').strip()) * 1000000
-                        elif 'billion' in amount_str.lower():
-                            amount = float(amount_str.lower().replace('billion', '').strip()) * 1000000000
-                        else:
-                            amount = float(amount_str)
-                    except ValueError:
-                        amount = 1000000  # Default amount if parsing fails
-                
-                # Extract project description (simplified)
-                project_title = _extract_project_title_from_block(block)
-                
-                contract = {
-                    "award_amount": amount,
-                    "contact_pi_name": "Unknown",  # DoD contracts don't typically list PIs
-                    "project_title": project_title,
-                    "project_start_date": datetime.now().strftime("%Y-%m-%d"),
-                    "project_end_date": (datetime.now() + timedelta(days=365*3)).strftime("%Y-%m-%d"),  # Assume 3 year contracts
-                    "organization": [{
-                        "org_name": org_name,
-                        "org_dept": None
-                    }],
-                    "fiscal_year": datetime.now().year,
-                    "funding_agency": "DoD",
-                    "is_active": True,
-                    "source": "DoD Daily Contracts"
-                }
-                contracts.append(contract)
-    
-    return contracts
-
-def _normalize_university_name(name: str) -> str:
-    """Normalize university names for better matching."""
-    import re
-    
-    # Remove extra whitespace and normalize
-    name = re.sub(r'\s+', ' ', name.strip())
-    
-    # Remove common corporate suffixes
-    name = re.sub(r'\s+(Inc\.?|LLC|Corp\.?|Corporation|Company|Co\.?)$', '', name, flags=re.IGNORECASE)
-    
-    # Handle "University of X" vs "X University" patterns
-    if 'University of' in name and not name.startswith('University of'):
-        # Extract the university part
-        parts = name.split('University of')
-        if len(parts) > 1:
-            name = f"University of {parts[1].strip()}"
-    
-    # Normalize common university name variations
-    name = name.replace('Univ.', 'University')
-    name = name.replace('Tech.', 'Technology')
-    name = name.replace('Inst.', 'Institute')
-    
-    return name
-
-def _is_university_name(name: str) -> bool:
-    """Check if the name appears to be a university/college."""
-    university_keywords = [
-        'university', 'college', 'institute of technology', 'technical institute',
-        'school of', 'academy', 'seminary'
-    ]
-    return any(keyword in name.lower() for keyword in university_keywords)
-
-def _extract_project_title_from_block(block: str) -> str:
-    """Extract a reasonable project title from contract block."""
-    lines = block.split('\n')
-    for line in lines[:5]:  # Check first few lines
-        line = line.strip()
-        if 20 < len(line) < 300 and not line.isupper() and not line.startswith('$'):  # Skip headers and amounts
-            return line[:200] + ("..." if len(line) > 200 else "")
-    return "DoD Research Contract"
+        
+        # Apply filters to sample data
+        if organization:
+            grants = [g for g in grants if organization.lower() in g["organization"][0]["org_name"].lower()]
+        if pi_name:
+            grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
+        if active_only:
+            grants = [g for g in grants if g.get("is_active", True)]
+        
+        return grants[:max_records]
 
 def _get_enhanced_dod_sample_grants() -> List[Dict[str, Any]]:
     """Enhanced sample DoD grants based on real contract patterns and known university partnerships."""
@@ -612,132 +521,185 @@ def _get_enhanced_dod_sample_grants() -> List[Dict[str, Any]]:
 
 async def fetch_doe_grants(organization: str = None, pi_name: str = None, active_only: bool = True, max_records: int = 1000) -> List[Dict[str, Any]]:
     """
-    Fetch DoE funding data based on typical DoE research programs and funding patterns.
-    Provides realistic funding data for energy research across major DoE offices and programs.
-    Future enhancement: Could be extended to scrape from energy.gov funding announcements.
+    Fetch DoE university grants from USASpending API.
     """
-    print(f"Fetching DoE grants (max: {max_records})...")
+    from federal_agency_integrator import FederalAgencyIntegrator
     
-    # Enhanced DoE research funding based on known programs and typical awards
-    doe_sample_grants = [
-        {
-            "project_title": "Perovskite Solar Cell Efficiency Enhancement",
-            "contact_pi_name": "Dr. Maria Gonzalez",
-            "organization": [{"org_name": "Stanford University", "org_dept": "Materials Science and Engineering"}],
-            "award_amount": 2400000,
-            "project_start_date": "2024-10-01",
-            "project_end_date": "2027-09-30",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Solar Energy Technologies Office"
-        },
-        {
-            "project_title": "Tokamak Plasma Confinement Research",
-            "contact_pi_name": "Dr. David Thompson",
-            "organization": [{"org_name": "Massachusetts Institute of Technology", "org_dept": "Nuclear Science and Engineering"}],
-            "award_amount": 4200000,
-            "project_start_date": "2024-07-01",
-            "project_end_date": "2027-06-30",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Fusion Energy Sciences"
-        },
-        {
-            "project_title": "Next-Generation Battery Chemistry for Grid Storage",
-            "contact_pi_name": "Dr. Jennifer Lee",
-            "organization": [{"org_name": "University of California, Berkeley", "org_dept": "Chemical and Biomolecular Engineering"}],
-            "award_amount": 1800000,
-            "project_start_date": "2024-01-15",
-            "project_end_date": "2026-12-31",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Advanced Research Projects Agency-Energy"
-        },
-        {
-            "project_title": "Direct Air Capture with Ionic Liquid Solvents",
-            "contact_pi_name": "Dr. Kevin Brown",
-            "organization": [{"org_name": "Carnegie Mellon University", "org_dept": "Chemical Engineering"}],
-            "award_amount": 3100000,
-            "project_start_date": "2024-03-01",
-            "project_end_date": "2027-02-28",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Fossil Energy and Carbon Management"
-        },
-        {
-            "project_title": "Offshore Wind Turbine Advanced Control Systems",
-            "contact_pi_name": "Dr. Amy Davis",
-            "organization": [{"org_name": "University of Texas at Austin", "org_dept": "Aerospace Engineering and Engineering Mechanics"}],
-            "award_amount": 1650000,
-            "project_start_date": "2024-09-01",
-            "project_end_date": "2027-08-31",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Wind Energy Technologies Office"
-        },
-        {
-            "project_title": "AI-Driven Smart Grid Optimization and Resilience",
-            "contact_pi_name": "Dr. Steven Martinez",
-            "organization": [{"org_name": "Georgia Institute of Technology", "org_dept": "Electrical and Computer Engineering"}],
-            "award_amount": 2250000,
-            "project_start_date": "2024-05-15",
-            "project_end_date": "2027-05-14",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Grid Modernization Laboratory Consortium"
-        },
-        {
-            "project_title": "Advanced Geothermal Energy Extraction Technologies",
-            "contact_pi_name": "Dr. Lisa Rodriguez",
-            "organization": [{"org_name": "University of California, San Diego", "org_dept": "Mechanical and Aerospace Engineering"}],
-            "award_amount": 1950000,
-            "project_start_date": "2024-04-01",
-            "project_end_date": "2026-03-31",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Geothermal Technologies Office"
-        },
-        {
-            "project_title": "Hydrogen Production via High-Temperature Electrolysis",
-            "contact_pi_name": "Dr. Robert Kim",
-            "organization": [{"org_name": "University of Michigan", "org_dept": "Chemical Engineering"}],
-            "award_amount": 2700000,
-            "project_start_date": "2024-08-01",
-            "project_end_date": "2027-07-31",
-            "fiscal_year": 2024,
-            "funding_agency": "DoE",
-            "is_active": True,
-            "source": "Hydrogen and Fuel Cell Technologies Office"
-        }
-    ]
+    print(f"Fetching DoE grants from USASpending API (max: {max_records})...")
     
-    # Filter by organization if specified
-    if organization:
+    try:
+        integrator = FederalAgencyIntegrator()
+        
+        # Fetch DoE awards using USASpending API
+        federal_data = await integrator.get_comprehensive_federal_data(
+            agencies=['DOE'],
+            include_opportunities=False,
+            include_awards=True
+        )
+        
+        doe_awards = federal_data.get('awards', [])
+        
+        # Convert to standard format expected by our system
+        grants = []
+        for award in doe_awards:
+            # Map from federal_agency_integrator format to our standard format
+            grant = {
+                "award_amount": award.get("award_amount", 0),
+                "contact_pi_name": "Unknown",  # USASpending doesn't typically include PI names
+                "project_title": award.get("description", award.get("project_title", "")),
+                "project_start_date": award.get("start_date", ""),
+                "project_end_date": award.get("end_date", ""),
+                "organization": [{
+                    "org_name": award.get("recipient_name", "Unknown"),
+                    "org_dept": None
+                }],
+                "fiscal_year": _extract_fiscal_year(award.get("start_date", "")),
+                "funding_agency": "DoE",
+                "is_active": True,  # Default to active, will be filtered later if needed
+                "award_id": award.get("award_id", ""),
+                "awarding_agency": award.get("awarding_agency", "Department of Energy"),
+                "sub_agency": award.get("sub_agency", ""),
+                "award_type": award.get("award_type", ""),
+                "source": "USASpending API"
+            }
+            grants.append(grant)
+        
+        # Filter by organization if specified
+        if organization:
+            normalized_org = integrator.normalize_institution_name(organization)
+            grants = [g for g in grants if normalized_org.lower() in integrator.normalize_institution_name(g["organization"][0]["org_name"]).lower()]
+        
+        # Filter by PI name if specified (unlikely to match since USASpending doesn't include PIs)
+        if pi_name:
+            grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
+        
+        # Filter active grants if specified
+        if active_only:
+            grants = [g for g in grants if g.get("is_active", True)]
+        
+        print(f"Total DoE grants fetched: {len(grants)}")
+        return grants[:max_records]
+        
+    except Exception as e:
+        print(f"Error fetching DoE grants from USASpending API: {e}")
+        # Fallback to sample data if API fails
+        print("Using enhanced sample data as fallback")
+        
+        # Enhanced DoE research funding based on known programs and typical awards
         doe_sample_grants = [
-            g for g in doe_sample_grants 
-            if organization.lower() in g["organization"][0]["org_name"].lower()
+            {
+                "project_title": "Perovskite Solar Cell Efficiency Enhancement",
+                "contact_pi_name": "Dr. Maria Gonzalez",
+                "organization": [{"org_name": "Stanford University", "org_dept": "Materials Science and Engineering"}],
+                "award_amount": 2400000,
+                "project_start_date": "2024-10-01",
+                "project_end_date": "2027-09-30",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Solar Energy Technologies Office"
+            },
+            {
+                "project_title": "Tokamak Plasma Confinement Research",
+                "contact_pi_name": "Dr. David Thompson",
+                "organization": [{"org_name": "Massachusetts Institute of Technology", "org_dept": "Nuclear Science and Engineering"}],
+                "award_amount": 4200000,
+                "project_start_date": "2024-07-01",
+                "project_end_date": "2027-06-30",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Fusion Energy Sciences"
+            },
+            {
+                "project_title": "Next-Generation Battery Chemistry for Grid Storage",
+                "contact_pi_name": "Dr. Jennifer Lee",
+                "organization": [{"org_name": "University of California, Berkeley", "org_dept": "Chemical and Biomolecular Engineering"}],
+                "award_amount": 1800000,
+                "project_start_date": "2024-01-15",
+                "project_end_date": "2026-12-31",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Advanced Research Projects Agency-Energy"
+            },
+            {
+                "project_title": "Direct Air Capture with Ionic Liquid Solvents",
+                "contact_pi_name": "Dr. Kevin Brown",
+                "organization": [{"org_name": "Carnegie Mellon University", "org_dept": "Chemical Engineering"}],
+                "award_amount": 3100000,
+                "project_start_date": "2024-03-01",
+                "project_end_date": "2027-02-28",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Fossil Energy and Carbon Management"
+            },
+            {
+                "project_title": "Offshore Wind Turbine Advanced Control Systems",
+                "contact_pi_name": "Dr. Amy Davis",
+                "organization": [{"org_name": "University of Texas at Austin", "org_dept": "Aerospace Engineering and Engineering Mechanics"}],
+                "award_amount": 1650000,
+                "project_start_date": "2024-09-01",
+                "project_end_date": "2027-08-31",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Wind Energy Technologies Office"
+            },
+            {
+                "project_title": "AI-Driven Smart Grid Optimization and Resilience",
+                "contact_pi_name": "Dr. Steven Martinez",
+                "organization": [{"org_name": "Georgia Institute of Technology", "org_dept": "Electrical and Computer Engineering"}],
+                "award_amount": 2250000,
+                "project_start_date": "2024-05-15",
+                "project_end_date": "2027-05-14",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Grid Modernization Laboratory Consortium"
+            },
+            {
+                "project_title": "Advanced Geothermal Energy Extraction Technologies",
+                "contact_pi_name": "Dr. Lisa Rodriguez",
+                "organization": [{"org_name": "University of California, San Diego", "org_dept": "Mechanical and Aerospace Engineering"}],
+                "award_amount": 1950000,
+                "project_start_date": "2024-04-01",
+                "project_end_date": "2026-03-31",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Geothermal Technologies Office"
+            },
+            {
+                "project_title": "Hydrogen Production via High-Temperature Electrolysis",
+                "contact_pi_name": "Dr. Robert Kim",
+                "organization": [{"org_name": "University of Michigan", "org_dept": "Chemical Engineering"}],
+                "award_amount": 2700000,
+                "project_start_date": "2024-08-01",
+                "project_end_date": "2027-07-31",
+                "fiscal_year": 2024,
+                "funding_agency": "DoE",
+                "is_active": True,
+                "source": "Hydrogen and Fuel Cell Technologies Office"
+            }
         ]
-    
-    # Filter by PI if specified
-    if pi_name:
-        doe_sample_grants = [
-            g for g in doe_sample_grants
-            if pi_name.lower() in g["contact_pi_name"].lower()
-        ]
-    
-    # Filter active grants if specified
-    if active_only:
-        doe_sample_grants = [g for g in doe_sample_grants if g.get("is_active", True)]
-    
-    print(f"Total DoE grants fetched: {len(doe_sample_grants)}")
-    return doe_sample_grants[:max_records]
+        
+        # Apply filters to sample data
+        if organization:
+            doe_sample_grants = [
+                g for g in doe_sample_grants 
+                if organization.lower() in g["organization"][0]["org_name"].lower()
+            ]
+        if pi_name:
+            doe_sample_grants = [
+                g for g in doe_sample_grants
+                if pi_name.lower() in g["contact_pi_name"].lower()
+            ]
+        if active_only:
+            doe_sample_grants = [g for g in doe_sample_grants if g.get("is_active", True)]
+        
+        return doe_sample_grants[:max_records]
 
 def estimate_lab_size(total_annual_funding: float, cost_per_researcher: float = 200000, department: str = None) -> Dict[str, Any]:
     """
