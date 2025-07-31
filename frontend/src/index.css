@@ -247,6 +247,14 @@ code {
   background: #007bff;
 }
 
+.funding-dod {
+  background: #dc3545;
+}
+
+.funding-doe {
+  background: #fd7e14;
+}
+
 .funding-legend {
   display: flex;
   gap: 15px;

@@ -427,7 +427,7 @@ async def fetch_dod_grants(organization: str = None, pi_name: str = None, active
         
         # Filter by PI name if specified (unlikely to match since USASpending doesn't include PIs)
         if pi_name:
-            grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
+            grants = [g for g in grants if pi_name.lower() in (g.get("contact_pi_name") or "").lower()]
         
         # Filter active grants if specified
         if active_only:
@@ -446,7 +446,7 @@ async def fetch_dod_grants(organization: str = None, pi_name: str = None, active
         if organization:
             grants = [g for g in grants if organization.lower() in g["organization"][0]["org_name"].lower()]
         if pi_name:
-            grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
+            grants = [g for g in grants if pi_name.lower() in (g.get("contact_pi_name") or "").lower()]
         if active_only:
             grants = [g for g in grants if g.get("is_active", True)]
         
@@ -571,7 +571,7 @@ async def fetch_doe_grants(organization: str = None, pi_name: str = None, active
         
         # Filter by PI name if specified (unlikely to match since USASpending doesn't include PIs)
         if pi_name:
-            grants = [g for g in grants if pi_name.lower() in g["contact_pi_name"].lower()]
+            grants = [g for g in grants if pi_name.lower() in (g.get("contact_pi_name") or "").lower()]
         
         # Filter active grants if specified
         if active_only:
@@ -694,7 +694,7 @@ async def fetch_doe_grants(organization: str = None, pi_name: str = None, active
         if pi_name:
             doe_sample_grants = [
                 g for g in doe_sample_grants
-                if pi_name.lower() in g["contact_pi_name"].lower()
+                if pi_name.lower() in (g.get("contact_pi_name") or "").lower()
             ]
         if active_only:
             doe_sample_grants = [g for g in doe_sample_grants if g.get("is_active", True)]
@@ -1373,7 +1373,8 @@ def _estimate_grant_department(grant: Dict[str, Any]) -> str:
     Estimate department for a grant based on title keywords.
     This is a simplified approach - could be enhanced with actual PI lookup.
     """
-    title = grant.get("project_title", "").lower()
+    title = grant.get("project_title") or ""
+    title = title.lower() if title else ""
     
     # Medical/Clinical keywords
     if any(word in title for word in ["cancer", "tumor", "oncology", "chemotherapy"]):

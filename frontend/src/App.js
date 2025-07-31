@@ -82,8 +82,12 @@ function App() {
       'Top Departments',
       'NIH Funding',
       'NSF Funding',
+      'DoD Funding',
+      'DoE Funding',
       'NIH Percentage',
-      'NSF Percentage'
+      'NSF Percentage',
+      'DoD Percentage',
+      'DoE Percentage'
     ];
 
     const csvData = leaderboardData.data.map(institution => [
@@ -100,8 +104,12 @@ function App() {
       institution.top_departments?.map(d => `${d.department} (${d.percentage}%)`).join('; ') || '',
       institution.funding_diversification?.nih_funding || 0,
       institution.funding_diversification?.nsf_funding || 0,
+      institution.funding_diversification?.dod_funding || 0,
+      institution.funding_diversification?.doe_funding || 0,
       institution.funding_diversification?.nih_percentage || 0,
-      institution.funding_diversification?.nsf_percentage || 0
+      institution.funding_diversification?.nsf_percentage || 0,
+      institution.funding_diversification?.dod_percentage || 0,
+      institution.funding_diversification?.doe_percentage || 0
     ]);
 
     const csvContent = [
@@ -149,8 +157,12 @@ function App() {
         'Top Departments',
         'NIH Funding',
         'NSF Funding',
+        'DoD Funding',
+        'DoE Funding',
         'NIH Percentage',
-        'NSF Percentage'
+        'NSF Percentage',
+        'DoD Percentage',
+        'DoE Percentage'
       ];
 
       const csvData = allData.data.map(institution => [
@@ -167,8 +179,12 @@ function App() {
         institution.top_departments?.map(d => `${d.department} (${d.percentage}%)`).join('; ') || '',
         institution.funding_diversification?.nih_funding || 0,
         institution.funding_diversification?.nsf_funding || 0,
+        institution.funding_diversification?.dod_funding || 0,
+        institution.funding_diversification?.doe_funding || 0,
         institution.funding_diversification?.nih_percentage || 0,
-        institution.funding_diversification?.nsf_percentage || 0
+        institution.funding_diversification?.nsf_percentage || 0,
+        institution.funding_diversification?.dod_percentage || 0,
+        institution.funding_diversification?.doe_percentage || 0
       ]);
 
       const csvContent = [
@@ -201,6 +217,8 @@ function App() {
   const InstitutionCard = ({ institution }) => {
     const nihPercentage = institution.funding_diversification?.nih_percentage || 0;
     const nsfPercentage = institution.funding_diversification?.nsf_percentage || 0;
+    const dodPercentage = institution.funding_diversification?.dod_percentage || 0;
+    const doePercentage = institution.funding_diversification?.doe_percentage || 0;
 
     return (
       <div className="institution-card">
@@ -250,6 +268,14 @@ function App() {
                 className="funding-nsf" 
                 style={{ width: `${nsfPercentage}%` }}
               ></div>
+              <div 
+                className="funding-dod" 
+                style={{ width: `${dodPercentage}%` }}
+              ></div>
+              <div 
+                className="funding-doe" 
+                style={{ width: `${doePercentage}%` }}
+              ></div>
             </div>
             <div className="funding-legend">
               <div className="legend-item">
@@ -260,6 +286,18 @@ function App() {
                 <div className="legend-color funding-nsf"></div>
                 <span>NSF: {nsfPercentage}% ({formatCurrency(institution.funding_diversification.nsf_funding)})</span>
               </div>
+              {dodPercentage > 0 && (
+                <div className="legend-item">
+                  <div className="legend-color funding-dod"></div>
+                  <span>DoD: {dodPercentage}% ({formatCurrency(institution.funding_diversification.dod_funding)})</span>
+                </div>
+              )}
+              {doePercentage > 0 && (
+                <div className="legend-item">
+                  <div className="legend-color funding-doe"></div>
+                  <span>DoE: {doePercentage}% ({formatCurrency(institution.funding_diversification.doe_funding)})</span>
+                </div>
+              )}
             </div>
           </div>
         )}
