@@ -279,7 +279,7 @@ def _extract_fiscal_year(date_str: str) -> int:
 
 async def fetch_combined_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records_per_source: int = 5000, include_federal: bool = True) -> List[Dict[str, Any]]:
     """
-    Fetch and combine grants from NIH, NSF, DoD, and DoE sources with caching support.
+    Fetch and combine grants from all federal agencies using USASpending.gov API.
     Returns a unified list of grants in consistent format.
     
     Args:
@@ -288,8 +288,10 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
         active_only: Only fetch active grants
         use_cache: Whether to use cached data if available
         max_records_per_source: Maximum records to fetch from each source
-        include_federal: Whether to include DoD and DoE funding data
+        include_federal: Whether to include DoD and DoE funding data (now integrated)
     """
+    from federal_agency_integrator import FederalAgencyIntegrator
+    
     # Check combined cache first if no filters
     if use_cache and organization is None and pi_name is None:
         cached_data = get_combined_cache()
@@ -301,79 +303,101 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
             print(f"Loaded {len(cached_data)} grants from cache ({nih_count} NIH + {nsf_count} NSF + {dod_count} DoD + {doe_count} DoE)")
             return cached_data
     
-    print("Fetching grants from NIH, NSF, DoD, and DoE...")
+    print("Fetching grants from all federal agencies via USASpending.gov...")
     
-    # Fetch from all sources
-    if active_only:
-        nih_grants = await fetch_active_grants(
-            organization=organization, 
-            pi_name=pi_name, 
-            use_cache=use_cache, 
-            max_records=max_records_per_source
+    try:
+        integrator = FederalAgencyIntegrator()
+        
+        # Define agencies to fetch
+        agencies = ['NIH', 'NSF']
+        if include_federal:
+            agencies.extend(['DOD', 'DOE'])
+        
+        # Fetch comprehensive federal data
+        federal_data = await integrator.get_comprehensive_federal_data(
+            agencies=agencies,
+            include_opportunities=False,
+            include_awards=True
         )
-    else:
-        # For terminated grants, we'll need a different NIH function
-        nih_grants = await fetch_active_grants(
-            organization=organization, 
-            pi_name=pi_name, 
-            use_cache=use_cache, 
-            max_records=max_records_per_source
-        )
-    
-    nsf_grants = await fetch_nsf_grants(
-        organization=organization, 
-        pi_name=pi_name, 
-        active_only=active_only, 
-        use_cache=use_cache, 
-        max_records=max_records_per_source
-    )
-    
-    # Fetch federal agency data if requested
-    dod_grants = []
-    doe_grants = []
-    if include_federal:
-        dod_grants = await fetch_dod_grants(
-            organization=organization,
-            pi_name=pi_name,
-            active_only=active_only,
-            max_records=max_records_per_source
-        )
-        doe_grants = await fetch_doe_grants(
-            organization=organization,
-            pi_name=pi_name,
-            active_only=active_only,
-            max_records=max_records_per_source
-        )
-    
-    # Combine and tag sources
-    all_grants = []
-    
-    # Add NIH grants with source tag
-    for grant in nih_grants:
-        grant["funding_agency"] = "NIH"
-        all_grants.append(grant)
-    
-    # Add NSF grants (already tagged in mapping function)
-    all_grants.extend(nsf_grants)
-    
-    # Add federal agency grants (already tagged)
-    all_grants.extend(dod_grants)
-    all_grants.extend(doe_grants)
-    
-    print(f"Combined total: {len(all_grants)} grants ({len(nih_grants)} NIH + {len(nsf_grants)} NSF + {len(dod_grants)} DoD + {len(doe_grants)} DoE)")
-    
-    # Cache the combined results if we fetched without filters
-    if use_cache and organization is None and pi_name is None:
-        save_combined_cache(all_grants, {
-            "nih_count": len(nih_grants),
-            "nsf_count": len(nsf_grants),
-            "dod_count": len(dod_grants),
-            "doe_count": len(doe_grants),
-            "total_count": len(all_grants),
-            "max_records_per_source": max_records_per_source
-        })
-    
-    return all_grants
+        
+        all_grants = []
+        awards = federal_data.get('awards', [])
+        
+        # Process and standardize awards from USASpending.gov
+        for award in awards:
+            try:
+                # Map federal award to our standard grant format
+                grant = {
+                    "award_amount": float(award.get("award_amount", 0)),
+                    "contact_pi_name": award.get("pi_name", award.get("principal_investigator", "Unknown")),
+                    "project_title": award.get("description", award.get("project_title", "")),
+                    "project_start_date": award.get("start_date", ""),
+                    "project_end_date": award.get("end_date", ""),
+                    "organization": [{
+                        "org_name": award.get("recipient_name", "Unknown"),
+                        "org_dept": award.get("department", None)
+                    }],
+                    "fiscal_year": _extract_fiscal_year(award.get("start_date", "")),
+                    "funding_agency": award.get("funding_agency", award.get("agency_name", "Unknown")).upper(),
+                    "is_active": award.get("is_active", True),
+                    "award_id": award.get("award_id", ""),
+                    "awarding_agency": award.get("awarding_agency", ""),
+                    "sub_agency": award.get("sub_agency", ""),
+                    "award_type": award.get("award_type", ""),
+                    "source": "USASpending.gov API"
+                }
+                
+                # Apply organization filter if specified
+                if organization:
+                    org_name = grant["organization"][0]["org_name"].lower()
+                    if organization.lower() not in org_name:
+                        continue
+                
+                # Apply PI name filter if specified
+                if pi_name and pi_name.lower() not in grant["contact_pi_name"].lower():
+                    continue
+                
+                # Apply active filter if specified
+                if active_only and not grant.get("is_active", True):
+                    continue
+                
+                all_grants.append(grant)
+                
+            except Exception as e:
+                print(f"Error processing award: {e}")
+                continue
+        
+        # Count by agency
+        nih_count = len([g for g in all_grants if g.get("funding_agency") == "NIH"])
+        nsf_count = len([g for g in all_grants if g.get("funding_agency") == "NSF"])
+        dod_count = len([g for g in all_grants if g.get("funding_agency") == "DOD"])
+        doe_count = len([g for g in all_grants if g.get("funding_agency") == "DOE"])
+        
+        print(f"Combined total: {len(all_grants)} grants ({nih_count} NIH + {nsf_count} NSF + {dod_count} DoD + {doe_count} DoE)")
+        
+        # Cache the combined results if we fetched without filters
+        if use_cache and organization is None and pi_name is None:
+            save_combined_cache(all_grants, {
+                "nih_count": nih_count,
+                "nsf_count": nsf_count,
+                "dod_count": dod_count,
+                "doe_count": doe_count,
+                "total_count": len(all_grants),
+                "max_records_per_source": max_records_per_source,
+                "source": "USASpending.gov API"
+            })
+        
+        return all_grants
+        
+    except Exception as e:
+        print(f"Error fetching federal grants: {e}")
+        # Fallback to empty list or cached data
+        if use_cache:
+            cached_data = get_combined_cache()
+            if cached_data:
+                print("Using cached data due to API error")
+                return cached_data
+        return []
 
 async def fetch_dod_grants(organization: str = None, pi_name: str = None, active_only: bool = True, max_records: int = 1000) -> List[Dict[str, Any]]:
     """
@@ -1136,6 +1160,116 @@ def normalize_institution_name(name: str) -> str:
     
     return ' '.join(title_cased)
 
+def is_academic_institution(institution_name: str) -> bool:
+    """
+    Determine if an institution name represents an academic institution (university, college, etc.)
+    rather than a corporate contractor, government agency, or other non-academic entity.
+    
+    Args:
+        institution_name: The institution name to check
+        
+    Returns:
+        bool: True if the institution appears to be academic, False otherwise
+    """
+    if not institution_name or institution_name == "Unknown":
+        return False
+    
+    import re
+    
+    # Convert to lowercase for case-insensitive matching
+    name_lower = institution_name.lower().strip()
+    
+    # Definitive academic indicators
+    academic_keywords = [
+        'university', 'college', 'institute of technology', 'polytechnic',
+        'school of medicine', 'medical school', 'dental school', 'law school',
+        'graduate school', 'seminary', 'conservatory', 'academy'
+    ]
+    
+    # Check for academic keywords
+    for keyword in academic_keywords:
+        if keyword in name_lower:
+            return True
+    
+    # Specific academic institution patterns
+    academic_patterns = [
+        r'\buniversity\b',
+        r'\bcollege\b',
+        r'\binstitute of technology\b',
+        r'\btech\b.*\buniversity\b',
+        r'\bstate\s+university\b',
+        r'\bcommunity\s+college\b',
+        r'\bmedical\s+college\b',
+        r'\bschool\s+of\b',
+        r'\buniv\b',
+        r'\bcoll\b',
+        r'\binst\b.*\btech\b',
+        r'^mit\b',  # Massachusetts Institute of Technology
+        r'^caltech\b',  # California Institute of Technology
+        r'\bregents\s+of\s+the\s+university\b',
+        r'\bboard\s+of\s+regents\b',
+        r'\btrustees\s+of\b.*\buniversity\b',
+        r'\bthe\s+.*\s+university\b',
+        r'\bstate\s+university\s+of\b'
+    ]
+    
+    for pattern in academic_patterns:
+        if re.search(pattern, name_lower):
+            return True
+    
+    # Non-academic indicators (corporate contractors, national labs, etc.)
+    non_academic_keywords = [
+        'corp', 'corporation', 'inc', 'llc', 'ltd', 'company', 'co.',
+        'technologies', 'systems', 'solutions', 'services', 'international',
+        'aerospace', 'defense', 'military', 'naval', 'army', 'air force',
+        'lockheed', 'boeing', 'raytheon', 'northrop', 'general dynamics',
+        'national laboratory', 'national lab', 'energy research', 
+        'nuclear security', 'propulsion', 'research alliance',
+        'washington', 'savannah river', 'oak ridge', 'los alamos',
+        'sandia', 'argonne', 'brookhaven', 'fermi', 'jefferson',
+        'bechtel', 'bwxt', 'aecom', 'kbr', 'fluor', 'jacobs',
+        'protection solutions', 'marine propulsion', 'advanced technology'
+    ]
+    
+    # Check for non-academic indicators
+    for keyword in non_academic_keywords:
+        if keyword in name_lower:
+            return False
+    
+    # Special handling for research institutes and centers
+    # Some are academic (university-affiliated), others are not
+    if 'institute' in name_lower or 'center' in name_lower:
+        # Check if it's clearly affiliated with a university
+        university_affiliated_patterns = [
+            r'university.*institute',
+            r'institute.*university',
+            r'college.*institute',
+            r'institute.*college',
+            r'university.*center',
+            r'center.*university'
+        ]
+        
+        for pattern in university_affiliated_patterns:
+            if re.search(pattern, name_lower):
+                return True
+        
+        # Independent research institutes - be more selective
+        independent_research_patterns = [
+            r'^the\s+.*\s+institute$',
+            r'research\s+institute',
+            r'institute\s+for\s+.*research',
+            r'center\s+for\s+.*research'
+        ]
+        
+        for pattern in independent_research_patterns:
+            if re.search(pattern, name_lower):
+                # Only consider academic if it doesn't have corporate indicators
+                has_corporate_indicators = any(keyword in name_lower for keyword in ['corp', 'inc', 'llc', 'technologies', 'systems'])
+                return not has_corporate_indicators
+    
+    # Default to False for ambiguous cases
+    return False
+
 async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20) -> Dict[str, Any]:
     """
     Get institutions ranked by layoff risk based on funding cliffs and lab sizes.
@@ -1224,6 +1358,10 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
     
     for institution, data in institution_data.items():
         if data["total_active_funding"] < 100000:  # Skip institutions with minimal funding
+            continue
+        
+        # Filter out non-academic institutions (corporate contractors, national labs, etc.)
+        if not is_academic_institution(institution):
             continue
             
         # Determine department composition for this institution

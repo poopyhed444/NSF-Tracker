@@ -354,6 +354,29 @@ async def test_multiple_lookups(force_refresh: bool = False):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in multiple PI lookup test: {str(e)}")
+        for name, institution in test_cases:
+            try:
+                result = await get_pi_department(name, institution, force_refresh=force_refresh)
+                results.append({
+                    "pi_name": name,
+                    "institution": institution,
+                    "result": result
+                })
+            except Exception as e:
+                results.append({
+                    "pi_name": name,
+                    "institution": institution,
+                    "error": str(e)
+                })
+        
+        return {
+            "status": "success",
+            "test_cases": len(test_cases),
+            "force_refresh": force_refresh,
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in multiple PI lookup test: {str(e)}")
 
 @app.post("/api/refresh-specific-pi")
 async def refresh_specific_pi(name: str, institution: str):
@@ -819,6 +842,120 @@ async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit
         return await generate_layoff_risk_leaderboard(cost_per_researcher, limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
+
+@app.get("/api/institution-details")
+async def get_institution_details(institution: str):
+    """
+    Get detailed information about a specific institution including PI details from cache.
+    Uses the pi_department_cache to get enhanced PI information.
+    """
+    try:
+        from layoff_estimator import fetch_combined_grants
+        import json
+        import os
+        
+        # Fetch grants for this institution
+        active_grants = await fetch_combined_grants(organization=institution, active_only=True)
+        
+        if not active_grants:
+            return {
+                "error": f"No grants found for {institution}",
+                "institution": institution
+            }
+        
+        # Load PI department cache to get detailed PI information
+        cache_file = os.path.join(os.path.dirname(__file__), "pi_department_cache.json")
+        pi_cache = {}
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    pi_cache = json.load(f)
+            except Exception as e:
+                print(f"Error loading PI cache: {e}")
+        
+        # Group grants by PI and collect detailed information
+        pi_details = {}
+        
+        for grant in active_grants:
+            pi_name = grant.get("contact_pi_name", "Unknown")
+            if not pi_name or pi_name == "Unknown":
+                continue
+                
+            if pi_name not in pi_details:
+                # Look up PI in cache
+                pi_info = {"department": "Unknown", "source": "none", "confidence": "none"}
+                
+                # Try to find PI in cache (normalize name for lookup)
+                normalized_name = pi_name.lower().strip()
+                for key in pi_cache.keys():
+                    if institution.lower() in key.lower() and normalized_name in key.lower():
+                        pi_info = pi_cache[key]
+                        break
+                
+                pi_details[pi_name] = {
+                    "name": pi_name,
+                    "department": pi_info.get("department", "Unknown"),
+                    "source": pi_info.get("source", "none"),
+                    "confidence": pi_info.get("confidence", "none"),
+                    "grants": [],
+                    "total_funding": 0,
+                    "grant_count": 0
+                }
+            
+            # Add grant to PI
+            try:
+                grant_amount = float(grant.get("award_amount", 0))
+                pi_details[pi_name]["total_funding"] += grant_amount
+                pi_details[pi_name]["grant_count"] += 1
+                pi_details[pi_name]["grants"].append({
+                    "title": grant.get("project_title", "Unknown"),
+                    "amount": grant_amount,
+                    "agency": grant.get("funding_agency", "Unknown"),
+                    "end_date": grant.get("project_end_date", "Unknown")
+                })
+            except (ValueError, TypeError):
+                pi_details[pi_name]["grant_count"] += 1
+                pi_details[pi_name]["grants"].append({
+                    "title": grant.get("project_title", "Unknown"),
+                    "amount": 0,
+                    "agency": grant.get("funding_agency", "Unknown"),
+                    "end_date": grant.get("project_end_date", "Unknown")
+                })
+        
+        # Sort PIs by total funding
+        sorted_pis = sorted(
+            pi_details.values(), 
+            key=lambda x: x["total_funding"], 
+            reverse=True
+        )
+        
+        # Add recent grants to each PI (top 3 most recent)
+        for pi in sorted_pis:
+            pi["recent_grants"] = sorted(
+                pi["grants"], 
+                key=lambda x: x.get("end_date", ""), 
+                reverse=True
+            )[:3]
+        
+        return {
+            "institution": institution,
+            "pi_details": sorted_pis,
+            "total_pis": len(sorted_pis),
+            "total_grants": len(active_grants),
+            "total_funding": sum(pi["total_funding"] for pi in sorted_pis),
+            "department_breakdown": {
+                dept: len([pi for pi in sorted_pis if pi["department"] == dept])
+                for dept in set(pi["department"] for pi in sorted_pis)
+            },
+            "cache_info": {
+                "cache_entries": len(pi_cache),
+                "cache_hit_rate": len([pi for pi in sorted_pis if pi["source"] != "none"]) / len(sorted_pis) if sorted_pis else 0
+            },
+            "last_updated": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting institution details: {str(e)}")
 
 def group_grants_by_institution(active_grants, terminated_grants):
     """

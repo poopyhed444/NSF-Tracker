@@ -3,13 +3,12 @@ import axios from 'axios';
 
 function App() {
   const [leaderboardData, setLeaderboardData] = useState(null);
-  const [federalData, setFederalData] = useState(null);
-  const [activeTab, setActiveTab] = useState('leaderboard');
+  const [selectedInstitution, setSelectedInstitution] = useState(null);
+  const [institutionDetails, setInstitutionDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [federalLoading, setFederalLoading] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [selectedAgencies, setSelectedAgencies] = useState(['NSF', 'NIH', 'DOD', 'DOE', 'NASA']);
 
   const fetchLeaderboard = async () => {
     try {
@@ -27,19 +26,18 @@ function App() {
     }
   };
 
-  const fetchFederalData = async () => {
+  const fetchInstitutionDetails = async (institutionName) => {
     try {
-      setFederalLoading(true);
+      setDetailsLoading(true);
       setError(null);
       
-      const agencyParam = selectedAgencies.join(',');
-      const response = await axios.get(`/api/federal-agencies/data?agencies=${agencyParam}&include_awards=true&include_opportunities=false&limit=500`);
-      setFederalData(response.data);
+      const response = await axios.get(`/api/institution-details?institution=${encodeURIComponent(institutionName)}`);
+      setInstitutionDetails(response.data);
     } catch (err) {
-      setError(`Failed to fetch federal data: ${err.message}`);
-      console.error('Error fetching federal data:', err);
+      setError(`Failed to fetch institution details: ${err.message}`);
+      console.error('Error fetching institution details:', err);
     } finally {
-      setFederalLoading(false);
+      setDetailsLoading(false);
     }
   };
 
@@ -220,8 +218,13 @@ function App() {
     const dodPercentage = institution.funding_diversification?.dod_percentage || 0;
     const doePercentage = institution.funding_diversification?.doe_percentage || 0;
 
+    const handleInstitutionClick = () => {
+      setSelectedInstitution(institution);
+      fetchInstitutionDetails(institution.institution);
+    };
+
     return (
-      <div className="institution-card">
+      <div className="institution-card" onClick={handleInstitutionClick} style={{ cursor: 'pointer' }}>
         <div className="institution-header">
           <div className="institution-name">{institution.institution}</div>
           <div className={getRiskBadgeClass(institution.risk_level)}>
@@ -322,250 +325,104 @@ function App() {
     );
   };
 
-  const FederalAgencyExplorer = () => {
-    const exportFederalToCSV = () => {
-      if (!federalData?.data?.labs) return;
-
-      const headers = [
-        'Institution Name',
-        'Total Funding', 
-        'Total Awards',
-        'Average Award Amount',
-        'PI Count Estimate',
-        'Funding Trend',
-        'Top Agencies',
-        'Research Areas'
-      ];
-
-      const csvData = federalData.data.labs.map(lab => [
-        lab.institution_name || '',
-        lab.total_funding || 0,
-        lab.total_awards || 0,
-        lab.avg_award_amount || 0,
-        lab.pi_count || 0,
-        lab.funding_trend || '',
-        Object.keys(lab.agency_breakdown || {}).join('; '),
-        (lab.top_research_areas || []).join('; ')
-      ]);
-
-      const csvContent = [headers, ...csvData]
-        .map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
-        .join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `federal-labs-${selectedAgencies.join('-')}-${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      alert(`Successfully exported ${federalData.data.labs.length} lab funding summaries to CSV`);
-    };
-
-    const handleAgencyToggle = (agency) => {
-      setSelectedAgencies(prev => 
-        prev.includes(agency) 
-          ? prev.filter(a => a !== agency)
-          : [...prev, agency]
-      );
-    };
-
+  const InstitutionDetails = ({ institution, onBack }) => {
     return (
-      <div>
-        {/* Agency Selection */}
-        <div className="leaderboard-controls" style={{ marginBottom: '20px' }}>
-          <div>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>Select Agencies:</h3>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {['NSF', 'NIH', 'DOD', 'DOE', 'NASA'].map(agency => (
-                <button
-                  key={agency}
-                  onClick={() => handleAgencyToggle(agency)}
-                  style={{
-                    padding: '8px 16px',
-                    border: '2px solid #667eea',
-                    borderRadius: '20px',
-                    background: selectedAgencies.includes(agency) ? '#667eea' : 'white',
-                    color: selectedAgencies.includes(agency) ? 'white' : '#667eea',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {agency}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-            <button 
-              onClick={fetchFederalData} 
-              className="refresh-button"
-              disabled={federalLoading || selectedAgencies.length === 0}
-            >
-              {federalLoading ? 'Loading...' : '🔄 Fetch Lab Data'}
-            </button>
-            
-            {federalData?.data?.labs && (
-              <button 
-                onClick={exportFederalToCSV}
-                className="export-button"
-                disabled={federalLoading}
-              >
-                📊 Export Labs CSV
-              </button>
-            )}
-          </div>
+      <div className="institution-details">
+        <div className="details-header">
+          <button 
+            onClick={onBack}
+            className="back-button"
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #667eea',
+              borderRadius: '5px',
+              background: 'white',
+              color: '#667eea',
+              cursor: 'pointer',
+              marginBottom: '20px'
+            }}
+          >
+            ← Back to Leaderboard
+          </button>
+          <h2 style={{ color: '#333', margin: '0 0 20px 0' }}>
+            {institution.institution} - Detailed Analysis
+          </h2>
         </div>
 
-        {/* Federal Data Display */}
-        {federalLoading && (
-          <div className="loading">Loading federal agency lab data...</div>
+        {detailsLoading && (
+          <div className="loading">Loading detailed institution data...</div>
         )}
 
-        {federalData?.data && (
-          <div className="leaderboard">
-            <div className="leaderboard-header">
-              🏛️ Federal Research Labs Funding Summary
-              <div style={{ float: 'right', fontSize: '0.9rem', opacity: 0.8 }}>
-                {federalData.data.summary?.total_labs || 0} labs • ${(federalData.data.summary?.total_funding || 0).toLocaleString()} total
+        {institutionDetails && (
+          <div className="details-content">
+            <div className="details-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+              <div className="detail-card">
+                <h3>Risk Assessment</h3>
+                <div className="metric">
+                  <div className="metric-label">Risk Level</div>
+                  <div className={`metric-value ${institution.risk_level.toLowerCase()}`}>
+                    {institution.risk_level}
+                  </div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Risk Score</div>
+                  <div className="metric-value">{institution.risk_score}</div>
+                </div>
               </div>
-            </div>
-            
-            {/* Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', padding: '20px' }}>
-              <div className="metric" style={{ textAlign: 'center' }}>
-                <div className="metric-label">Total Labs</div>
-                <div className="metric-value">{formatNumber(federalData.data.summary?.total_labs || 0)}</div>
+
+              <div className="detail-card">
+                <h3>Lab Size & Impact</h3>
+                <div className="metric">
+                  <div className="metric-label">Estimated Lab Size</div>
+                  <div className="metric-value">{institution.estimated_lab_size} researchers</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">At-Risk Positions</div>
+                  <div className="metric-value">{institution.at_risk_positions}</div>
+                </div>
               </div>
-              <div className="metric" style={{ textAlign: 'center' }}>
-                <div className="metric-label">Total Funding</div>
-                <div className="metric-value">{formatCurrency(federalData.data.summary?.total_funding || 0)}</div>
-              </div>
-              <div className="metric" style={{ textAlign: 'center' }}>
-                <div className="metric-label">Total Awards</div>
-                <div className="metric-value">{formatNumber(federalData.data.summary?.total_awards || 0)}</div>
-              </div>
-              <div className="metric" style={{ textAlign: 'center' }}>
-                <div className="metric-label">Agencies Queried</div>
-                <div className="metric-value">{(federalData.data.summary?.agencies_queried || []).join(', ')}</div>
+
+              <div className="detail-card">
+                <h3>Funding Status</h3>
+                <div className="metric">
+                  <div className="metric-label">Total Active Funding</div>
+                  <div className="metric-value">{formatCurrency(institution.total_active_funding)}</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Funding Cliff</div>
+                  <div className="metric-value">{institution.funding_cliff_percentage}%</div>
+                </div>
               </div>
             </div>
 
-            {/* Top Labs by Funding */}
-            <div style={{ padding: '0 20px 20px' }}>
-              <h3 style={{ color: '#333', marginBottom: '15px' }}>Research Labs by Federal Funding</h3>
-              {(federalData.data.labs || []).map((lab, index) => (
-                <div key={index} className="institution-card" style={{ marginBottom: '15px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div className="institution-name" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
-                        {lab.institution_name}
-                      </div>
-                      
-                      {/* Funding Breakdown */}
-                      <div style={{ color: '#666', fontSize: '0.9rem', marginTop: '8px' }}>
-                        <strong>Agency Breakdown:</strong>
-                        {Object.entries(lab.agency_breakdown || {}).map(([agency, data]) => (
-                          <span key={agency} style={{ marginRight: '15px' }}>
-                            {agency}: {formatCurrency(data.funding)} ({data.awards} awards)
-                          </span>
-                        ))}
-                      </div>
-                      
-                      {/* Recent Awards */}
-                      {lab.recent_awards && lab.recent_awards.length > 0 && (
-                        <div style={{ color: '#666', fontSize: '0.85rem', marginTop: '5px' }}>
-                          <strong>Recent Awards:</strong> {lab.recent_awards.slice(0, 2).map(award => 
-                            `${award.agency} - ${formatCurrency(award.amount)}`
-                          ).join(' • ')}
-                        </div>
-                      )}
-                      
-                      {/* Research Areas */}
-                      {lab.top_research_areas && lab.top_research_areas.length > 0 && (
-                        <div style={{ color: '#666', fontSize: '0.85rem', marginTop: '3px' }}>
-                          <strong>Research Areas:</strong> {lab.top_research_areas.join(', ')}
+            {institutionDetails.pi_details && (
+              <div className="pi-section">
+                <h3>Principal Investigators</h3>
+                <div className="pi-grid">
+                  {institutionDetails.pi_details.slice(0, 10).map((pi, index) => (
+                    <div key={index} className="pi-card">
+                      <div className="pi-name">{pi.name}</div>
+                      <div className="pi-department">{pi.department}</div>
+                      <div className="pi-grants">{pi.grant_count} grants • {formatCurrency(pi.total_funding)}</div>
+                      {pi.recent_grants && (
+                        <div className="recent-grants">
+                          {pi.recent_grants.slice(0, 2).map((grant, idx) => (
+                            <div key={idx} className="grant-item">
+                              {grant.title.substring(0, 60)}...
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-                    
-                    <div style={{ textAlign: 'right', marginLeft: '20px' }}>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#667eea' }}>
-                        {formatCurrency(lab.total_funding || 0)}
-                      </div>
-                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
-                        {lab.total_awards || 0} awards • ~{lab.pi_count || 0} PIs
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                        Avg: {formatCurrency(lab.avg_award_amount || 0)}
-                      </div>
-                      <div style={{ 
-                        fontSize: '0.8rem', 
-                        color: lab.funding_trend === 'increasing' ? '#28a745' : 
-                               lab.funding_trend === 'decreasing' ? '#dc3545' : '#6c757d',
-                        fontWeight: '500'
-                      }}>
-                        📈 {lab.funding_trend || 'stable'}
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
     );
   };
-
-  const TabNavigation = () => (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      marginBottom: '30px',
-      borderBottom: '2px solid #eee'
-    }}>
-      <button
-        onClick={() => setActiveTab('leaderboard')}
-        style={{
-          padding: '15px 30px',
-          border: 'none',
-          background: activeTab === 'leaderboard' ? '#667eea' : 'transparent',
-          color: activeTab === 'leaderboard' ? 'white' : '#667eea',
-          fontSize: '16px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          borderRadius: '8px 8px 0 0',
-          transition: 'all 0.3s ease'
-        }}
-      >
-        🚨 Risk Leaderboard
-      </button>
-      <button
-        onClick={() => setActiveTab('federal')}
-        style={{
-          padding: '15px 30px',
-          border: 'none',
-          background: activeTab === 'federal' ? '#667eea' : 'transparent',
-          color: activeTab === 'federal' ? 'white' : '#667eea',
-          fontSize: '16px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          borderRadius: '8px 8px 0 0',
-          marginLeft: '5px',
-          transition: 'all 0.3s ease'
-        }}
-      >
-        🏛️ Federal Agencies
-      </button>
-    </div>
-  );
 
   if (loading) {
     return (
@@ -597,12 +454,18 @@ function App() {
     <div className="container">
       <div className="header">
         <h1>🚨 Academic Layoff Risk Tracker</h1>
-        <p>Real-time analysis of NIH & NSF funding risks across research institutions</p>
+        <p>Real-time analysis of federal funding risks across research institutions</p>
       </div>
 
-      <TabNavigation />
-
-      {activeTab === 'leaderboard' ? (
+      {selectedInstitution ? (
+        <InstitutionDetails 
+          institution={selectedInstitution} 
+          onBack={() => {
+            setSelectedInstitution(null);
+            setInstitutionDetails(null);
+          }} 
+        />
+      ) : (
         <>
           <div className="stats-bar">
             <div className="stat-item">
@@ -676,7 +539,7 @@ function App() {
 
           <div className="leaderboard">
             <div className="leaderboard-header">
-              🏆 Institution Risk Leaderboard
+              🏆 Institution Risk Leaderboard - Click to View Details
               {lastUpdated && <span style={{ float: 'right', fontSize: '0.9rem', opacity: 0.8 }}>
                 Last updated: {lastUpdated}
               </span>}
@@ -690,11 +553,9 @@ function App() {
           <div style={{ marginTop: '30px', padding: '20px', background: 'white', borderRadius: '10px', fontSize: '0.9rem', color: '#666' }}>
             <strong>Methodology:</strong> Risk scores combine funding cliff analysis (40%), recent funding loss (30%), lab size impact (20%), 
             and grant concentration penalties (10%). Department-specific cost models and agency diversification bonuses are applied. 
-            Data sources: NIH RePORTER and NSF Award Search APIs.
+            Data sources: USASpending.gov, NIH RePORTER, and NSF Award Search APIs.
           </div>
         </>
-      ) : (
-        <FederalAgencyExplorer />
       )}
     </div>
   );
