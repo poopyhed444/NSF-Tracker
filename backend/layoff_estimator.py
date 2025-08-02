@@ -3,6 +3,27 @@ Layoff Impact Estimation Module
 
 This module provides functionality to estimate lab sizes and potential layoff impact
 based on grant funding analysis, funding cliffs, and historical data.
+
+FUNDING DATA ARCHITECTURE:
+--------------------------
+This module now uses two separate data fetching approaches based on use case:
+
+1. INSTITUTION ANALYSIS (fetch_institution_grants):
+   - Sources: NIH Reporter API + NSF Awards API
+   - Use for: Detailed institution analysis, PI information, project details
+   - Provides: High-quality data with PI names, project titles, detailed metadata
+   - Agencies: NIH and NSF only
+
+2. TOTAL FUNDING CALCULATIONS (fetch_total_funding_grants):
+   - Sources: USASpending.gov API
+   - Use for: Funding resources, leaderboards, total active funding amounts
+   - Provides: Most accurate funding totals across all federal agencies
+   - Agencies: All federal agencies (NIH, NSF, DOD, DOE, NASA, USDA, EPA, etc.)
+
+This separation ensures:
+- Detailed analysis uses high-quality, direct API data
+- Funding totals use the most comprehensive and accurate source
+- No data quality compromise for either use case
 """
 
 from datetime import datetime, timedelta
@@ -24,6 +45,82 @@ from grant_cache import (
 # API endpoints
 NIH_API_URL = "https://api.reporter.nih.gov/v2/projects/search"
 NSF_API_URL = "https://www.research.gov/awardapi-service/v1/awards.json"
+
+def _map_agency_name(agency_name: str) -> str:
+    """
+    Map agency names from USASpending.gov to our standard agency codes.
+    Enhanced mapping to catch more variations and NIH sub-agencies.
+    """
+    if not agency_name:
+        return "UNKNOWN"
+        
+    agency_name = agency_name.upper().strip()
+    
+    # Map common agency name variations to standard codes  
+    agency_mapping = {
+        # NIH and HHS variations
+        "DEPARTMENT OF HEALTH AND HUMAN SERVICES": "NIH",
+        "HEALTH AND HUMAN SERVICES": "NIH",
+        "HHS": "NIH",
+        "NATIONAL INSTITUTES OF HEALTH": "NIH",
+        "NIH": "NIH",
+        "NATIONAL INSTITUTE OF HEALTH": "NIH",
+        "PUBLIC HEALTH SERVICE": "NIH",
+        
+        # NSF variations
+        "NATIONAL SCIENCE FOUNDATION": "NSF", 
+        "NSF": "NSF",
+        "SCIENCE FOUNDATION": "NSF",
+        
+        # DOD variations
+        "DEPARTMENT OF DEFENSE": "DOD",
+        "DOD": "DOD",
+        "DEFENSE": "DOD",
+        "AIR FORCE": "DOD",
+        "ARMY": "DOD", 
+        "NAVY": "DOD",
+        "MARINES": "DOD",
+        "DEFENSE ADVANCED RESEARCH PROJECTS AGENCY": "DOD",
+        "DARPA": "DOD",
+        
+        # DOE variations
+        "DEPARTMENT OF ENERGY": "DOE",
+        "DOE": "DOE",
+        "ENERGY": "DOE",
+        
+        # Other common agencies
+        "NATIONAL AERONAUTICS AND SPACE ADMINISTRATION": "NASA",
+        "NASA": "NASA",
+        "DEPARTMENT OF AGRICULTURE": "USDA",
+        "USDA": "USDA",
+        "DEPARTMENT OF EDUCATION": "ED",
+        "EDUCATION": "ED",
+        "ENVIRONMENTAL PROTECTION AGENCY": "EPA",
+        "EPA": "EPA",
+        
+        "UNKNOWN": "UNKNOWN"
+    }
+    
+    # Direct lookup first
+    if agency_name in agency_mapping:
+        return agency_mapping[agency_name]
+    
+    # Partial matching for complex agency names
+    for key, value in agency_mapping.items():
+        if key in agency_name or agency_name in key:
+            return value
+    
+    # Special handling for NIH institutes and centers
+    nih_keywords = ["INSTITUTE", "CENTER", "CLINICAL", "MEDICINE", "MEDICAL", "HEALTH", "DISEASE", "CANCER", "MENTAL"]
+    if any(keyword in agency_name for keyword in nih_keywords):
+        return "NIH"
+    
+    # Special handling for NSF directorates 
+    nsf_keywords = ["SCIENCE", "ENGINEERING", "MATHEMATICS", "GEOSCIENCE", "BIOLOGICAL", "COMPUTER", "SOCIAL"]
+    if any(keyword in agency_name for keyword in nsf_keywords) and "FOUNDATION" in agency_name:
+        return "NSF"
+    
+    return "UNKNOWN"
 
 async def fetch_active_grants(organization: str = None, pi_name: str = None, use_cache: bool = True, max_records: int = 5000) -> List[Dict[str, Any]]:
     """
@@ -277,10 +374,10 @@ def _extract_fiscal_year(date_str: str) -> int:
     except (ValueError, IndexError):
         return datetime.now().year
 
-async def fetch_combined_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records_per_source: int = 5000, include_federal: bool = True) -> List[Dict[str, Any]]:
+async def fetch_institution_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records_per_source: int = 5000) -> List[Dict[str, Any]]:
     """
-    Fetch and combine grants from all federal agencies using USASpending.gov API.
-    Returns a unified list of grants in consistent format.
+    Fetch NIH and NSF grants only for institution analysis and detailed grant information.
+    This provides high-quality data with PI names and detailed project information.
     
     Args:
         organization: Filter by organization name
@@ -288,39 +385,82 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
         active_only: Only fetch active grants
         use_cache: Whether to use cached data if available
         max_records_per_source: Maximum records to fetch from each source
-        include_federal: Whether to include DoD and DoE funding data (now integrated)
     """
+    print("Fetching NIH and NSF grants for institution analysis...")
+    
+    all_grants = []
+    
+    try:
+        # 1. Fetch NIH grants directly from NIH API for higher quality data
+        print("Fetching NIH grants from NIH Reporter API...")
+        try:
+            nih_grants = await fetch_active_grants(organization, pi_name, use_cache=False, max_records=max_records_per_source)
+            # Ensure NIH grants are properly tagged
+            for grant in nih_grants:
+                grant["funding_agency"] = "NIH"
+                grant["source"] = "NIH Reporter API"
+            all_grants.extend(nih_grants)
+            print(f"Added {len(nih_grants)} NIH grants from Reporter API")
+        except Exception as e:
+            print(f"Error fetching NIH grants: {e}")
+        
+        # 2. Fetch NSF grants directly from NSF API for higher quality data
+        print("Fetching NSF grants from NSF Awards API...")
+        try:
+            nsf_grants = await fetch_nsf_grants(organization, pi_name, active_only, use_cache=False, max_records=max_records_per_source)
+            # Ensure NSF grants are properly tagged
+            for grant in nsf_grants:
+                grant["funding_agency"] = "NSF"
+                grant["source"] = "NSF Awards API"
+            all_grants.extend(nsf_grants)
+            print(f"Added {len(nsf_grants)} NSF grants from Awards API")
+        except Exception as e:
+            print(f"Error fetching NSF grants: {e}")
+        
+        # Count by agency
+        nih_count = len([g for g in all_grants if g.get("funding_agency") == "NIH"])
+        nsf_count = len([g for g in all_grants if g.get("funding_agency") == "NSF"])
+        
+        print(f"Institution grants total: {len(all_grants)} grants ({nih_count} NIH + {nsf_count} NSF)")
+        
+        return all_grants
+        
+    except Exception as e:
+        print(f"Error fetching institution grants: {e}")
+        return []
+
+async def fetch_total_funding_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records_per_source: int = 5000) -> List[Dict[str, Any]]:
+    """
+    Fetch comprehensive funding data from USASpending.gov for accurate total funding calculations.
+    This includes all federal agencies and provides the most accurate funding amounts.
+    
+    Args:
+        organization: Filter by organization name
+        pi_name: Filter by PI name  
+        active_only: Only fetch active grants
+        use_cache: Whether to use cached data if available
+        max_records_per_source: Maximum records to fetch from each source
+    """
+    import httpx
     from federal_agency_integrator import FederalAgencyIntegrator
     
-    # Check combined cache first if no filters
-    if use_cache and organization is None and pi_name is None:
-        cached_data = get_combined_cache()
-        if cached_data:
-            nih_count = len([g for g in cached_data if g.get("funding_agency") == "NIH"])
-            nsf_count = len([g for g in cached_data if g.get("funding_agency") == "NSF"])
-            dod_count = len([g for g in cached_data if g.get("funding_agency") == "DOD"])
-            doe_count = len([g for g in cached_data if g.get("funding_agency") == "DOE"])
-            print(f"Loaded {len(cached_data)} grants from cache ({nih_count} NIH + {nsf_count} NSF + {dod_count} DoD + {doe_count} DoE)")
-            return cached_data
+    print("Fetching comprehensive funding data from USASpending.gov...")
     
-    print("Fetching grants from all federal agencies via USASpending.gov...")
+    all_grants = []
     
     try:
         integrator = FederalAgencyIntegrator()
         
-        # Define agencies to fetch
-        agencies = ['NIH', 'NSF']
-        if include_federal:
-            agencies.extend(['DOD', 'DOE'])
+        # Fetch all federal agency data from USASpending.gov for most accurate funding totals
+        federal_agencies = ['DOD', 'DOE', 'NIH', 'NSF', 'NASA', 'USDA', 'EPA']
         
         # Fetch comprehensive federal data
         federal_data = await integrator.get_comprehensive_federal_data(
-            agencies=agencies,
+            agencies=federal_agencies,
             include_opportunities=False,
             include_awards=True
         )
         
-        all_grants = []
         awards = federal_data.get('awards', [])
         
         # Process and standardize awards from USASpending.gov
@@ -328,22 +468,22 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
             try:
                 # Map federal award to our standard grant format
                 grant = {
-                    "award_amount": float(award.get("award_amount", 0)),
+                    "award_amount": float(award.get("Award Amount", award.get("award_amount", 0))),
                     "contact_pi_name": award.get("pi_name", award.get("principal_investigator", "Unknown")),
-                    "project_title": award.get("description", award.get("project_title", "")),
-                    "project_start_date": award.get("start_date", ""),
-                    "project_end_date": award.get("end_date", ""),
+                    "project_title": award.get("Award Description", award.get("description", award.get("project_title", ""))),
+                    "project_start_date": award.get("Start Date", award.get("start_date", "")),
+                    "project_end_date": award.get("End Date", award.get("end_date", "")),
                     "organization": [{
-                        "org_name": award.get("recipient_name", "Unknown"),
+                        "org_name": award.get("Recipient Name", award.get("recipient_name", "Unknown")),
                         "org_dept": award.get("department", None)
                     }],
-                    "fiscal_year": _extract_fiscal_year(award.get("start_date", "")),
-                    "funding_agency": award.get("funding_agency", award.get("agency_name", "Unknown")).upper(),
+                    "fiscal_year": _extract_fiscal_year(award.get("Start Date", award.get("start_date", ""))),
+                    "funding_agency": _map_agency_name(award.get("Awarding Agency", award.get("awarding_agency", "Unknown"))),
                     "is_active": award.get("is_active", True),
-                    "award_id": award.get("award_id", ""),
-                    "awarding_agency": award.get("awarding_agency", ""),
-                    "sub_agency": award.get("sub_agency", ""),
-                    "award_type": award.get("award_type", ""),
+                    "award_id": award.get("Award ID", award.get("award_id", "")),
+                    "awarding_agency": award.get("Awarding Agency", award.get("awarding_agency", "")),
+                    "sub_agency": award.get("Awarding Sub Agency", award.get("sub_agency", "")),
+                    "award_type": award.get("Award Type", award.get("award_type", "")),
                     "source": "USASpending.gov API"
                 }
                 
@@ -364,8 +504,163 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
                 all_grants.append(grant)
                 
             except Exception as e:
-                print(f"Error processing award: {e}")
+                print(f"Error processing USASpending award: {e}")
                 continue
+        
+        # Count by agency
+        agency_counts = {}
+        for grant in all_grants:
+            agency = grant.get("funding_agency", "UNKNOWN")
+            agency_counts[agency] = agency_counts.get(agency, 0) + 1
+        
+        print(f"Total funding grants: {len(all_grants)} from USASpending.gov")
+        for agency, count in agency_counts.items():
+            print(f"  {agency}: {count} grants")
+        
+        return all_grants
+        
+    except Exception as e:
+        print(f"Error fetching total funding grants: {e}")
+        return []
+
+async def fetch_combined_grants(organization: str = None, pi_name: str = None, active_only: bool = True, use_cache: bool = True, max_records_per_source: int = 5000, include_federal: bool = True) -> List[Dict[str, Any]]:
+    """
+    DEPRECATED: Use fetch_institution_grants() for institution analysis or fetch_total_funding_grants() for funding totals.
+    
+    Fetch and combine grants from all federal agencies using multiple APIs.
+    Combines USASpending.gov API data with direct NIH and NSF API calls for comprehensive coverage.
+    
+    Args:
+        organization: Filter by organization name
+        pi_name: Filter by PI name  
+        active_only: Only fetch active grants
+        use_cache: Whether to use cached data if available
+        max_records_per_source: Maximum records to fetch from each source
+        include_federal: Whether to include DoD and DoE funding data
+    """
+    import httpx
+    from federal_agency_integrator import FederalAgencyIntegrator
+    
+    # Check combined cache first if no filters
+    if use_cache and organization is None and pi_name is None:
+        cached_data = get_combined_cache()
+        if cached_data:
+            nih_count = len([g for g in cached_data if g.get("funding_agency") == "NIH"])
+            nsf_count = len([g for g in cached_data if g.get("funding_agency") == "NSF"])
+            dod_count = len([g for g in cached_data if g.get("funding_agency") == "DOD"])
+            doe_count = len([g for g in cached_data if g.get("funding_agency") == "DOE"])
+            print(f"Loaded {len(cached_data)} grants from cache ({nih_count} NIH + {nsf_count} NSF + {dod_count} DoD + {doe_count} DoE)")
+            return cached_data
+    
+    print("Fetching grants from all federal agencies via multiple APIs...")
+    
+    all_grants = []
+    
+    try:
+        # 1. Fetch NIH grants directly from NIH API for higher quality data
+        print("Fetching NIH grants from NIH Reporter API...")
+        try:
+            nih_grants = await fetch_active_grants(organization, pi_name, use_cache=False, max_records=max_records_per_source)
+            # Ensure NIH grants are properly tagged
+            for grant in nih_grants:
+                grant["funding_agency"] = "NIH"
+                grant["source"] = "NIH Reporter API"
+            all_grants.extend(nih_grants)
+            print(f"Added {len(nih_grants)} NIH grants from Reporter API")
+        except Exception as e:
+            print(f"Error fetching NIH grants: {e}")
+        
+        # 2. Fetch NSF grants directly from NSF API for higher quality data
+        print("Fetching NSF grants from NSF Awards API...")
+        try:
+            nsf_grants = await fetch_nsf_grants(organization, pi_name, active_only, use_cache=False, max_records=max_records_per_source)
+            # Ensure NSF grants are properly tagged
+            for grant in nsf_grants:
+                grant["funding_agency"] = "NSF"
+                grant["source"] = "NSF Awards API"
+            all_grants.extend(nsf_grants)
+            print(f"Added {len(nsf_grants)} NSF grants from Awards API")
+        except Exception as e:
+            print(f"Error fetching NSF grants: {e}")
+        
+        # 3. Fetch additional federal agency data from USASpending.gov
+        if include_federal:
+            print("Fetching DoD, DoE, and additional grants from USASpending.gov...")
+            try:
+                integrator = FederalAgencyIntegrator()
+                
+                # Define agencies to fetch from USASpending
+                federal_agencies = ['DOD', 'DOE']
+                # Also include NIH/NSF to catch any additional awards not in direct APIs
+                federal_agencies.extend(['NIH', 'NSF'])
+                
+                # Fetch comprehensive federal data
+                federal_data = await integrator.get_comprehensive_federal_data(
+                    agencies=federal_agencies,
+                    include_opportunities=False,
+                    include_awards=True
+                )
+                
+                awards = federal_data.get('awards', [])
+                
+                # Process and standardize awards from USASpending.gov
+                for award in awards:
+                    try:
+                        # Map federal award to our standard grant format
+                        grant = {
+                            "award_amount": float(award.get("Award Amount", award.get("award_amount", 0))),
+                            "contact_pi_name": award.get("pi_name", award.get("principal_investigator", "Unknown")),
+                            "project_title": award.get("Award Description", award.get("description", award.get("project_title", ""))),
+                            "project_start_date": award.get("Start Date", award.get("start_date", "")),
+                            "project_end_date": award.get("End Date", award.get("end_date", "")),
+                            "organization": [{
+                                "org_name": award.get("Recipient Name", award.get("recipient_name", "Unknown")),
+                                "org_dept": award.get("department", None)
+                            }],
+                            "fiscal_year": _extract_fiscal_year(award.get("Start Date", award.get("start_date", ""))),
+                            "funding_agency": _map_agency_name(award.get("Awarding Agency", award.get("awarding_agency", "Unknown"))),
+                            "is_active": award.get("is_active", True),
+                            "award_id": award.get("Award ID", award.get("award_id", "")),
+                            "awarding_agency": award.get("Awarding Agency", award.get("awarding_agency", "")),
+                            "sub_agency": award.get("Awarding Sub Agency", award.get("sub_agency", "")),
+                            "award_type": award.get("Award Type", award.get("award_type", "")),
+                            "source": "USASpending.gov API"
+                        }
+                        
+                        # Apply organization filter if specified
+                        if organization:
+                            org_name = grant["organization"][0]["org_name"].lower()
+                            if organization.lower() not in org_name:
+                                continue
+                        
+                        # Apply PI name filter if specified
+                        if pi_name and pi_name.lower() not in grant["contact_pi_name"].lower():
+                            continue
+                        
+                        # Apply active filter if specified
+                        if active_only and not grant.get("is_active", True):
+                            continue
+                        
+                        # Check if this is a duplicate (same award ID from different sources)
+                        award_id = grant.get("award_id", "")
+                        is_duplicate = False
+                        if award_id and award_id != "":
+                            for existing_grant in all_grants:
+                                if existing_grant.get("award_id") == award_id:
+                                    is_duplicate = True
+                                    break
+                        
+                        if not is_duplicate:
+                            all_grants.append(grant)
+                        
+                    except Exception as e:
+                        print(f"Error processing USASpending award: {e}")
+                        continue
+                
+                print(f"Added additional grants from USASpending.gov API")
+                
+            except Exception as e:
+                print(f"Error fetching USASpending federal grants: {e}")
         
         # Count by agency
         nih_count = len([g for g in all_grants if g.get("funding_agency") == "NIH"])
@@ -384,14 +679,14 @@ async def fetch_combined_grants(organization: str = None, pi_name: str = None, a
                 "doe_count": doe_count,
                 "total_count": len(all_grants),
                 "max_records_per_source": max_records_per_source,
-                "source": "USASpending.gov API"
+                "sources": ["NIH Reporter API", "NSF Awards API", "USASpending.gov API"]
             })
         
         return all_grants
         
     except Exception as e:
-        print(f"Error fetching federal grants: {e}")
-        # Fallback to empty list or cached data
+        print(f"Error fetching combined grants: {e}")
+        # Fallback to cached data if available
         if use_cache:
             cached_data = get_combined_cache()
             if cached_data:
@@ -809,12 +1104,10 @@ def calculate_funding_cliff(grants: List[Dict[str, Any]], months_ahead: int = 12
 async def estimate_institution_impact(institution: str, cost_per_researcher: float = 200000) -> Dict[str, Any]:
     """
     Estimate lab sizes and potential layoff impact for an institution.
-    Now includes both NIH and NSF funding data.
+    Uses NIH and NSF grants only for detailed institution analysis.
     """
-    from main import fetch_terminated_grants  # Import to avoid circular imports
-    
-    # Fetch combined active grants from both NIH and NSF
-    active_grants = await fetch_combined_grants(organization=institution, active_only=True)
+    # Fetch NIH and NSF grants for detailed institution analysis
+    active_grants = await fetch_institution_grants(organization=institution, active_only=True)
     terminated_grants = await fetch_terminated_grants()  # NIH only for now
     
     if not active_grants and not terminated_grants:
@@ -848,6 +1141,9 @@ async def estimate_institution_impact(institution: str, cost_per_researcher: flo
     # Calculate funding cliff (grants expiring in next 12 months)
     cliff_analysis = calculate_funding_cliff(active_grants, months_ahead=12)
     
+    # Get comprehensive funding data from USASpending.gov for accurate totals
+    total_funding_data = await get_institution_total_funding(institution, active_only=True)
+    
     # Calculate recent funding loss from terminated grants
     terminated_funding = sum(
         float(grant.get("award_amount", 0))
@@ -863,7 +1159,22 @@ async def estimate_institution_impact(institution: str, cost_per_researcher: flo
         "institution": institution,
         "current_lab_size": lab_size,
         "funding_breakdown": {
-            "total_active_funding": total_active_funding,
+            # Detailed analysis based on NIH/NSF grants (for PI and project details)
+            "detailed_analysis": {
+                "nih_nsf_funding": total_active_funding,
+                "nih_funding": nih_funding,
+                "nsf_funding": nsf_funding,
+                "nih_percentage": round(nih_funding / total_active_funding * 100, 1) if total_active_funding > 0 else 0,
+                "nsf_percentage": round(nsf_funding / total_active_funding * 100, 1) if total_active_funding > 0 else 0,
+                "grant_count": len(active_grants),
+                "nih_grant_count": len([g for g in active_grants if g.get("funding_agency") == "NIH"]),
+                "nsf_grant_count": len([g for g in active_grants if g.get("funding_agency") == "NSF"]),
+                "data_source": "NIH Reporter API + NSF Awards API"
+            },
+            # Total funding from all federal agencies (for accurate funding totals)
+            "total_funding": total_funding_data,
+            # Legacy fields for backward compatibility
+            "total_active_funding": total_funding_data.get("total_funding", total_active_funding),
             "nih_funding": nih_funding,
             "nsf_funding": nsf_funding,
             "nih_percentage": round(nih_funding / total_active_funding * 100, 1) if total_active_funding > 0 else 0,
@@ -883,7 +1194,11 @@ async def estimate_institution_impact(institution: str, cost_per_researcher: flo
             "cost_per_researcher": cost_per_researcher,
             "analysis_window": "12 months ahead",
             "confidence": lab_size.get("confidence", "medium"),
-            "data_sources": ["NIH RePORTER", "NSF Award Search API", "DoD Contract Data (defense.gov)", "DoE Research Programs"]
+            "data_sources": {
+                "institution_analysis": ["NIH Reporter API", "NSF Awards API"],
+                "total_funding": ["USASpending.gov API"],
+                "note": "Institution analysis uses NIH/NSF for detailed grant info; total funding uses USASpending.gov for accuracy"
+            }
         },
         "last_updated": datetime.now().isoformat()
     }
@@ -891,12 +1206,12 @@ async def estimate_institution_impact(institution: str, cost_per_researcher: flo
 async def analyze_pi_lab_impact(pi_name: str, institution: str, cost_per_researcher: float = 200000) -> Dict[str, Any]:
     """
     Analyze a specific PI's lab for funding and layoff risk.
-    Now includes both NIH and NSF grants.
+    Uses NIH and NSF grants only for detailed PI analysis.
     """
     from pi_department_lookup import get_pi_department  # Import to avoid circular imports
     
-    # Fetch combined grants for this specific PI from both NIH and NSF
-    active_grants = await fetch_combined_grants(pi_name=pi_name, active_only=True)
+    # Fetch NIH and NSF grants for this specific PI
+    active_grants = await fetch_institution_grants(pi_name=pi_name, active_only=True)
     
     # Filter by institution if needed
     if institution:
@@ -998,6 +1313,93 @@ def _assess_primary_risk_factor(active_grants: List[Dict], cliff_analysis: Dict,
         return "Funding cliff"
     
     return "Normal"
+
+async def get_institution_total_funding(institution: str = None, active_only: bool = True) -> Dict[str, Any]:
+    """
+    Get total funding amounts for an institution using USASpending.gov data for maximum accuracy.
+    This is used for funding resources, leaderboards, and total active funding calculations.
+    
+    Args:
+        institution: Institution name to filter by
+        active_only: Only include active grants
+        
+    Returns:
+        Dictionary with total funding breakdown by agency and overall totals
+    """
+    print(f"Fetching total funding data for {institution or 'all institutions'} from USASpending.gov...")
+    
+    try:
+        # Fetch comprehensive funding data from USASpending.gov
+        funding_grants = await fetch_total_funding_grants(
+            organization=institution, 
+            active_only=active_only
+        )
+        
+        if not funding_grants:
+            return {
+                "institution": institution,
+                "error": "No funding data found",
+                "total_funding": 0,
+                "agency_breakdown": {}
+            }
+        
+        # Calculate totals by agency
+        agency_totals = {}
+        total_funding = 0
+        
+        for grant in funding_grants:
+            agency = grant.get("funding_agency", "UNKNOWN")
+            amount = float(grant.get("award_amount", 0))
+            
+            if agency not in agency_totals:
+                agency_totals[agency] = {
+                    "total_amount": 0,
+                    "grant_count": 0,
+                    "grants": []
+                }
+            
+            agency_totals[agency]["total_amount"] += amount
+            agency_totals[agency]["grant_count"] += 1
+            
+            # Add grant details (safely handle potential None values)
+            grant_title = grant.get("project_title", "Unknown")
+            if grant_title and len(grant_title) > 100:
+                grant_title = grant_title[:100]
+            
+            agency_totals[agency]["grants"].append({
+                "title": grant_title or "Unknown",
+                "amount": amount,
+                "start_date": grant.get("project_start_date", ""),
+                "end_date": grant.get("project_end_date", ""),
+                "award_id": grant.get("award_id", "")
+            })
+            
+            total_funding += amount
+        
+        # Calculate percentages
+        for agency_data in agency_totals.values():
+            agency_data["percentage"] = round(
+                (agency_data["total_amount"] / total_funding * 100) if total_funding > 0 else 0, 
+                1
+            )
+        
+        return {
+            "institution": institution,
+            "total_funding": total_funding,
+            "total_grants": len(funding_grants),
+            "agency_breakdown": agency_totals,
+            "data_source": "USASpending.gov API",
+            "last_updated": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Error fetching total funding data: {e}")
+        return {
+            "institution": institution,
+            "error": f"Error fetching funding data: {str(e)}",
+            "total_funding": 0,
+            "agency_breakdown": {}
+        }
 
 async def fetch_terminated_grants() -> List[Dict[str, Any]]:
     """Fetch recently terminated grants for analysis (NIH only)."""
@@ -1320,13 +1722,14 @@ async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, 
                 institution_data[normalized_name]["total_active_funding"] += amount
                 
                 # Track funding by agency
-                if grant.get("funding_agency") == "NIH":
+                funding_agency = grant.get("funding_agency", "").upper()
+                if funding_agency == "NIH":
                     institution_data[normalized_name]["nih_funding"] += amount
-                elif grant.get("funding_agency") == "NSF":
+                elif funding_agency == "NSF":
                     institution_data[normalized_name]["nsf_funding"] += amount
-                elif grant.get("funding_agency") == "DoD":
+                elif funding_agency == "DOD":
                     institution_data[normalized_name]["dod_funding"] += amount
-                elif grant.get("funding_agency") == "DoE":
+                elif funding_agency == "DOE":
                     institution_data[normalized_name]["doe_funding"] += amount
                     
             except (ValueError, TypeError):

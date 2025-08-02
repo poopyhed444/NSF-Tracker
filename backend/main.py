@@ -563,8 +563,8 @@ async def _refresh_unknown_pis_impl():
 
 async def fetch_active_grants(organization: str = None, pi_name: str = None) -> List[Dict[str, Any]]:
     """Fetch currently active grants for analysis - now includes both NIH and NSF."""
-    from layoff_estimator import fetch_combined_grants
-    return await fetch_combined_grants(organization=organization, pi_name=pi_name, active_only=True)
+    from layoff_estimator import fetch_institution_grants
+    return await fetch_institution_grants(organization=organization, pi_name=pi_name, active_only=True)
 
 def estimate_lab_size(total_annual_funding: float, cost_per_researcher: float = 200000) -> Dict[str, Any]:
     """
@@ -661,13 +661,13 @@ async def clear_grant_cache():
 async def refresh_grant_cache(max_records_per_source: int = 10000):
     """Force refresh of grant data cache with more records."""
     try:
-        from layoff_estimator import fetch_combined_grants
+        from layoff_estimator import fetch_total_funding_grants
         
         # Clear existing cache and fetch fresh data
         clear_cache()
         
-        # Fetch with higher limits and force no cache usage
-        grants = await fetch_combined_grants(
+        # Fetch comprehensive funding data for cache
+        grants = await fetch_total_funding_grants(
             use_cache=False, 
             max_records_per_source=max_records_per_source
         )
@@ -816,20 +816,38 @@ async def analyze_pi_lab(pi_name: str, institution: str, cost_per_researcher: fl
 
 @app.get("/api/test-combined-grants")
 async def test_combined_grants_endpoint():
-    """Test endpoint to verify NIH + NSF grant fetching."""
+    """Test endpoint to verify funding data separation."""
     try:
-        from layoff_estimator import fetch_combined_grants
-        grants = await fetch_combined_grants(active_only=True)
+        from layoff_estimator import fetch_institution_grants, fetch_total_funding_grants
         
-        nih_count = sum(1 for g in grants if g.get("funding_agency") == "NIH")
-        nsf_count = sum(1 for g in grants if g.get("funding_agency") == "NSF")
+        # Test institution grants (NIH + NSF)
+        institution_grants = await fetch_institution_grants(active_only=True, max_records_per_source=100)
+        institution_nih = sum(1 for g in institution_grants if g.get("funding_agency") == "NIH")
+        institution_nsf = sum(1 for g in institution_grants if g.get("funding_agency") == "NSF")
+        
+        # Test total funding grants (all agencies)
+        total_funding_grants = await fetch_total_funding_grants(active_only=True, max_records_per_source=100)
+        
+        # Count agencies in total funding
+        agency_counts = {}
+        for grant in total_funding_grants:
+            agency = grant.get("funding_agency", "UNKNOWN")
+            agency_counts[agency] = agency_counts.get(agency, 0) + 1
         
         return {
             "status": "success",
-            "total_grants": len(grants),
-            "nih_grants": nih_count,
-            "nsf_grants": nsf_count,
-            "sample_grants": grants[:3] if grants else []
+            "institution_analysis": {
+                "total_grants": len(institution_grants),
+                "nih_grants": institution_nih,
+                "nsf_grants": institution_nsf,
+                "data_source": "NIH Reporter API + NSF Awards API"
+            },
+            "total_funding": {
+                "total_grants": len(total_funding_grants),
+                "agency_breakdown": agency_counts,
+                "data_source": "USASpending.gov API"
+            },
+            "architecture": "Separated data sources for different use cases"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error testing combined grants: {str(e)}")
@@ -844,10 +862,110 @@ async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit
         raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
 
 @app.get("/api/institution-details")
-async def get_institution_details(institution: str):
+async def get_institution_details(institution: str, include_cancelled: bool = False):
     """
     Get detailed information about a specific institution including PI details from cache.
     Uses the pi_department_cache to get enhanced PI information.
+    
+    Args:
+        institution: Institution name to analyze
+        include_cancelled: Whether to include cancelled/terminated grants in the response
+    """
+    try:
+        from layoff_estimator import fetch_combined_grants, fetch_terminated_grants
+        from grant_cache import get_cache_status, clear_cache
+        import json
+        
+        # Fetch active grants for this institution
+        active_grants = await fetch_combined_grants(organization=institution, active_only=True)
+        
+        # Optionally fetch terminated grants if requested
+        terminated_grants = []
+        if include_cancelled:
+            terminated_grants = await fetch_terminated_grants()
+            # Filter terminated grants to this institution
+            terminated_grants = [
+                grant for grant in terminated_grants
+                if institution.lower() in str(grant.get("organization", {})).lower()
+            ]
+        
+        if not active_grants and not terminated_grants:
+            raise HTTPException(status_code=404, detail=f"No grant data found for institution: {institution}")
+        
+        # Group grants by funding agency
+        agency_breakdown = defaultdict(lambda: {"grants": [], "total_funding": 0, "active_funding": 0, "cancelled_funding": 0})
+        
+        # Process active grants
+        for grant in active_grants:
+            agency = grant.get("funding_agency", "UNKNOWN")
+            agency_breakdown[agency]["grants"].append({**grant, "status": "active"})
+            amount = float(grant.get("award_amount", 0))
+            agency_breakdown[agency]["total_funding"] += amount
+            agency_breakdown[agency]["active_funding"] += amount
+        
+        # Process terminated grants if included
+        for grant in terminated_grants:
+            agency = grant.get("funding_agency", "NIH")  # Terminated grants are typically NIH from our current API
+            agency_breakdown[agency]["grants"].append({**grant, "status": "terminated"})
+            amount = float(grant.get("award_amount", 0))
+            agency_breakdown[agency]["total_funding"] += amount
+            agency_breakdown[agency]["cancelled_funding"] += amount
+        
+        # Calculate summary statistics
+        total_active_funding = sum(data["active_funding"] for data in agency_breakdown.values())
+        total_cancelled_funding = sum(data["cancelled_funding"] for data in agency_breakdown.values())
+        
+        # Calculate funding diversification percentages
+        funding_diversification = {}
+        if total_active_funding > 0:
+            for agency, data in agency_breakdown.items():
+                funding_diversification[f"{agency.lower()}_funding"] = data["active_funding"]
+                funding_diversification[f"{agency.lower()}_percentage"] = round(data["active_funding"] / total_active_funding * 100, 1)
+        
+        # Count agencies with active funding
+        agencies_with_funding = len([agency for agency, data in agency_breakdown.items() if data["active_funding"] > 0])
+        funding_diversification["agencies_with_funding"] = agencies_with_funding
+        
+        # Load PI department cache for enhanced information
+        pi_cache_file = "pi_department_cache.json"
+        pi_departments = {}
+        try:
+            with open(pi_cache_file, 'r') as f:
+                pi_cache = json.load(f)
+                # Extract PI information for this institution
+                for pi_name, pi_data in pi_cache.items():
+                    if pi_data.get("institution", "").lower() == institution.lower():
+                        pi_departments[pi_name] = pi_data
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        
+        response = {
+            "institution": institution,
+            "active_grants_count": len(active_grants),
+            "terminated_grants_count": len(terminated_grants) if include_cancelled else 0,
+            "total_active_funding": total_active_funding,
+            "total_cancelled_funding": total_cancelled_funding if include_cancelled else 0,
+            "funding_diversification": funding_diversification,
+            "agency_breakdown": dict(agency_breakdown) if include_cancelled else {
+                agency: {
+                    "grants": [g for g in data["grants"] if g.get("status") == "active"],
+                    "total_funding": data["active_funding"],
+                    "active_funding": data["active_funding"]
+                }
+                for agency, data in agency_breakdown.items()
+                if data["active_funding"] > 0
+            },
+            "pi_departments": pi_departments,
+            "last_updated": datetime.now().isoformat(),
+            "include_cancelled": include_cancelled
+        }
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting institution details: {str(e)}")
     """
     try:
         from layoff_estimator import fetch_combined_grants
@@ -957,6 +1075,39 @@ async def get_institution_details(institution: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting institution details: {str(e)}")
 
+@app.post("/api/refresh-cache")
+async def refresh_grant_cache():
+    """Force refresh all grant caches and fetch fresh data from all APIs."""
+    try:
+        # Clear all caches
+        clear_cache()
+        
+        # Force fresh data fetch for total funding
+        from layoff_estimator import fetch_total_funding_grants
+        fresh_grants = await fetch_total_funding_grants(use_cache=False)
+        
+        # Count by agency
+        nih_count = len([g for g in fresh_grants if g.get("funding_agency") == "NIH"])
+        nsf_count = len([g for g in fresh_grants if g.get("funding_agency") == "NSF"])
+        dod_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOD"])
+        doe_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOE"])
+        
+        return {
+            "status": "success",
+            "message": "Grant cache refreshed successfully",
+            "total_grants": len(fresh_grants),
+            "agency_breakdown": {
+                "NIH": nih_count,
+                "NSF": nsf_count,
+                "DOD": dod_count,
+                "DOE": doe_count
+            },
+            "refreshed_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
+
 def group_grants_by_institution(active_grants, terminated_grants):
     """
     Group active and terminated grants by institution and sum funding.
@@ -1036,6 +1187,42 @@ def calculate_institution_risk(institution, data, cost_per_researcher):
         "terminated_grants_count": len(data["terminated_grants"]),
         "risk_level": level
     }
+
+@app.post("/api/refresh-cache")
+async def refresh_grant_cache():
+    """
+    Force refresh all grant caches and fetch fresh data from all APIs.
+    This will clear cached data and fetch new grants from NIH, NSF, and USASpending APIs.
+    """
+    try:
+        # Clear all caches
+        clear_cache()
+        
+        # Force fresh data fetch
+        from layoff_estimator import fetch_combined_grants
+        fresh_grants = await fetch_combined_grants(use_cache=False)
+        
+        # Count by agency
+        nih_count = len([g for g in fresh_grants if g.get("funding_agency") == "NIH"])
+        nsf_count = len([g for g in fresh_grants if g.get("funding_agency") == "NSF"])
+        dod_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOD"])
+        doe_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOE"])
+        
+        return {
+            "status": "success",
+            "message": "Grant cache refreshed successfully",
+            "total_grants": len(fresh_grants),
+            "agency_breakdown": {
+                "NIH": nih_count,
+                "NSF": nsf_count,
+                "DOD": dod_count,
+                "DOE": doe_count
+            },
+            "refreshed_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
