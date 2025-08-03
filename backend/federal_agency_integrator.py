@@ -129,7 +129,7 @@ class FederalAgencyIntegrator:
             
             if not award_types:
                 # Use correct USASpending award type codes
-                award_types = ['B', 'C', 'D']  # B=Cooperative Agreement, C=Block Grant, D=Project Grant
+                award_types = ['04', '05']  # 04=Project Grant, 05=Cooperative Agreement (university research)
                 
             if not fiscal_years:
                 current_year = datetime.now().year
@@ -332,7 +332,7 @@ class FederalAgencyIntegrator:
         try:
             dod_data = await self.fetch_usaspending_data(
                 agency_codes=['097'],  # Department of Defense
-                award_types=['B', 'C', 'D'],  # Cooperative Agreement, Block Grant, Project Grant
+                award_types=['04', '05'],  # Project Grant, Cooperative Agreement (university research)
                 limit=100
             )
             
@@ -377,7 +377,7 @@ class FederalAgencyIntegrator:
         try:
             doe_data = await self.fetch_usaspending_data(
                 agency_codes=['089'],  # Department of Energy
-                award_types=['B', 'C', 'D'],  # Cooperative Agreement, Block Grant, Project Grant
+                award_types=['04', '05'],  # Project Grant, Cooperative Agreement (university research)
                 limit=100
             )
             

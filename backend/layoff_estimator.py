@@ -1675,14 +1675,11 @@ def is_academic_institution(institution_name: str) -> bool:
 async def generate_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20) -> Dict[str, Any]:
     """
     Get institutions ranked by layoff risk based on funding cliffs and lab sizes.
-    Analyzes NIH and NSF funding data to assess institutional risk.
+    Uses total funding data from USASpending.gov for accurate funding calculations.
     """
-    # Fetch NIH + NSF grants and federal agency grants
-    active_grants = await fetch_combined_grants(active_only=True)
+    # Fetch comprehensive funding data from USASpending.gov for accurate totals
+    active_grants = await fetch_total_funding_grants(active_only=True)
     terminated_grants = await fetch_terminated_grants()
-    
-    # Note: Federal agency integration removed to focus on real NIH/NSF data
-    federal_grants = []
     
     if not active_grants:
         return {

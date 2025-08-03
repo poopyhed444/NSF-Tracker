@@ -64,7 +64,7 @@ function App() {
   };
 
   const exportToCSV = () => {
-    if (!leaderboardData?.data) return;
+    if (!leaderboardData?.institutions) return;
 
     const headers = [
       'Institution',
@@ -88,7 +88,7 @@ function App() {
       'DoE Percentage'
     ];
 
-    const csvData = leaderboardData.data.map(institution => [
+    const csvData = leaderboardData.institutions.map(institution => [
       institution.institution,
       institution.risk_level,
       institution.risk_score,
@@ -163,7 +163,7 @@ function App() {
         'DoE Percentage'
       ];
 
-      const csvData = allData.data.map(institution => [
+      const csvData = allData.institutions.map(institution => [
         institution.institution,
         institution.risk_level,
         institution.risk_score,
@@ -217,6 +217,8 @@ function App() {
     const nsfPercentage = institution.funding_diversification?.nsf_percentage || 0;
     const dodPercentage = institution.funding_diversification?.dod_percentage || 0;
     const doePercentage = institution.funding_diversification?.doe_percentage || 0;
+    const nasaPercentage = institution.funding_diversification?.nasa_percentage || 0;
+    const otherPercentage = institution.funding_diversification?.other_percentage || 0;
 
     const handleInstitutionClick = () => {
       setSelectedInstitution(institution);
@@ -236,6 +238,7 @@ function App() {
           <div className="metric">
             <div className="metric-label">At-Risk Positions</div>
             <div className="metric-value">{institution.at_risk_positions}</div>
+            <div className="metric-sublabel">Based on terminated research grants</div>
           </div>
           <div className="metric">
             <div className="metric-label">Recently Lost Positions</div>
@@ -244,6 +247,7 @@ function App() {
           <div className="metric">
             <div className="metric-label">Total Lab Size</div>
             <div className="metric-value">{institution.estimated_lab_size}</div>
+            <div className="metric-sublabel">Based on total funding</div>
           </div>
           <div className="metric">
             <div className="metric-label">Risk Score</div>
@@ -252,16 +256,18 @@ function App() {
           <div className="metric">
             <div className="metric-label">Active Funding</div>
             <div className="metric-value">{formatCurrency(institution.total_active_funding)}</div>
+            <div className="metric-sublabel">USASpending.gov total</div>
           </div>
           <div className="metric">
-            <div className="metric-label">Funding Cliff</div>
+            <div className="metric-label">Research Funding Cliff</div>
             <div className="metric-value">{institution.funding_cliff_percentage}%</div>
+            <div className="metric-sublabel">Terminated NIH/NSF vs total</div>
           </div>
         </div>
 
         {institution.funding_diversification && (
           <div className="funding-breakdown">
-            <div className="funding-breakdown-label">Funding Sources</div>
+            <div className="funding-breakdown-label">Funding Sources (USASpending.gov)</div>
             <div className="funding-bar">
               <div 
                 className="funding-nih" 
@@ -278,6 +284,14 @@ function App() {
               <div 
                 className="funding-doe" 
                 style={{ width: `${doePercentage}%` }}
+              ></div>
+              <div 
+                className="funding-nasa" 
+                style={{ width: `${nasaPercentage}%`, backgroundColor: '#ff6b6b' }}
+              ></div>
+              <div 
+                className="funding-other" 
+                style={{ width: `${otherPercentage}%`, backgroundColor: '#95a5a6' }}
               ></div>
             </div>
             <div className="funding-legend">
@@ -301,7 +315,24 @@ function App() {
                   <span>DoE: {doePercentage}% ({formatCurrency(institution.funding_diversification.doe_funding)})</span>
                 </div>
               )}
+              {nasaPercentage > 0 && (
+                <div className="legend-item">
+                  <div className="legend-color" style={{ backgroundColor: '#ff6b6b' }}></div>
+                  <span>NASA: {nasaPercentage}% ({formatCurrency(institution.funding_diversification.nasa_funding)})</span>
+                </div>
+              )}
+              {otherPercentage > 0 && (
+                <div className="legend-item">
+                  <div className="legend-color" style={{ backgroundColor: '#95a5a6' }}></div>
+                  <span>Other: {otherPercentage}% ({formatCurrency(institution.funding_diversification.other_funding)})</span>
+                </div>
+              )}
             </div>
+            {institution.funding_diversification.terminated_research_funding > 0 && (
+              <div className="terminated-funding-info" style={{ marginTop: '10px', padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px', fontSize: '0.9em' }}>
+                <strong>Terminated Research Funding:</strong> {formatCurrency(institution.funding_diversification.terminated_research_funding)} from NIH/NSF grants
+              </div>
+            )}
           </div>
         )}
 
@@ -446,9 +477,9 @@ function App() {
     );
   }
 
-  const totalAtRisk = leaderboardData?.data?.reduce((sum, inst) => sum + inst.at_risk_positions, 0) || 0;
-  const totalRecentlyLost = leaderboardData?.data?.reduce((sum, inst) => sum + inst.recently_lost_positions, 0) || 0;
-  const totalFunding = leaderboardData?.data?.reduce((sum, inst) => sum + inst.total_active_funding, 0) || 0;
+  const totalAtRisk = leaderboardData?.institutions?.reduce((sum, inst) => sum + inst.at_risk_positions, 0) || 0;
+  const totalRecentlyLost = leaderboardData?.institutions?.reduce((sum, inst) => sum + inst.recently_lost_positions, 0) || 0;
+  const totalFunding = leaderboardData?.institutions?.reduce((sum, inst) => sum + inst.total_active_funding, 0) || 0;
 
   return (
     <div className="container">
@@ -499,17 +530,17 @@ function App() {
               <button 
                 onClick={exportToCSV}
                 className="export-button"
-                disabled={!leaderboardData?.data || loading}
+                disabled={!leaderboardData?.institutions || loading}
                 style={{
                   padding: '10px 20px',
                   background: '#28a745',
                   color: 'white',
                   border: 'none',
                   borderRadius: '5px',
-                  cursor: leaderboardData?.data ? 'pointer' : 'not-allowed',
+                  cursor: leaderboardData?.institutions ? 'pointer' : 'not-allowed',
                   fontSize: '14px',
                   fontWeight: '500',
-                  opacity: leaderboardData?.data ? 1 : 0.6,
+                  opacity: leaderboardData?.institutions ? 1 : 0.6,
                   marginRight: '10px'
                 }}
               >
@@ -545,15 +576,17 @@ function App() {
               </span>}
             </div>
             
-            {leaderboardData?.data?.map((institution, index) => (
+            {leaderboardData?.institutions?.map((institution, index) => (
               <InstitutionCard key={index} institution={institution} />
             ))}
           </div>
 
           <div style={{ marginTop: '30px', padding: '20px', background: 'white', borderRadius: '10px', fontSize: '0.9rem', color: '#666' }}>
-            <strong>Methodology:</strong> Risk scores combine funding cliff analysis (40%), recent funding loss (30%), lab size impact (20%), 
-            and grant concentration penalties (10%). Department-specific cost models and agency diversification bonuses are applied. 
-            Data sources: USASpending.gov, NIH RePORTER, and NSF Award Search APIs.
+            <strong>New Methodology:</strong> Active funding totals from USASpending.gov (most comprehensive federal data). 
+            Risk scores calculated from terminated NIH/NSF research grants vs total funding (50%), recent research losses (30%), 
+            and agency concentration penalties (20%). Agency diversification bonuses up to 30% for 5+ funding sources. 
+            <br/><br/>
+            <strong>Data Sources:</strong> USASpending.gov for comprehensive funding totals, NIH RePORTER + NSF Awards for research-specific risk analysis.
           </div>
         </>
       )}
