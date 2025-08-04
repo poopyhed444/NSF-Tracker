@@ -7,6 +7,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import asyncio
+import json
+import os
 from layoff_estimator import fetch_institution_grants, fetch_total_funding_grants, normalize_institution_name, fetch_terminated_grants
 from grant_cache import clear_cache
 from collections import defaultdict
@@ -38,6 +40,179 @@ async def root():
         ]
     }
 
+def load_pi_department_cache():
+    """Load the PI department cache for matching PIs to departments"""
+    try:
+        cache_file = "pi_department_cache.json"
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        print(f"Error loading PI department cache: {e}")
+        return {}
+
+def match_pi_to_department(pi_name: str, institution: str, pi_cache: dict) -> str:
+    """Match a PI to their department using the cached data"""
+    if not pi_name or not institution:
+        return "Unknown Department"
+    
+    # Normalize PI name and institution for lookup
+    pi_key = f"{pi_name.lower().strip()}|{institution.lower().strip()}"
+    
+    # Direct lookup
+    if pi_key in pi_cache:
+        return pi_cache[pi_key].get('department', 'Unknown Department')
+    
+    # Try partial matching on PI name within the same institution
+    pi_name_normalized = pi_name.lower().strip()
+    institution_normalized = institution.lower().strip()
+    
+    for key, data in pi_cache.items():
+        if '|' in key:
+            cached_pi, cached_inst = key.split('|', 1)
+            if (cached_inst.strip() == institution_normalized and 
+                pi_name_normalized in cached_pi):
+                return data.get('department', 'Unknown Department')
+    
+    return "Unknown Department"
+
+@app.get("/api/university-details/{institution_name}")
+async def get_university_details(institution_name: str):
+    """Get detailed information about a university including cancelled grants by department"""
+    try:
+        print(f"Fetching details for: {institution_name}")
+        
+        # Normalize the institution name
+        normalized_institution = normalize_institution_name(institution_name)
+        
+        # Get USASpending funding data
+        usaspending_funding = get_usaspending_funding(normalized_institution)
+        
+        # Get terminated grants
+        terminated_grants = await fetch_terminated_grants()
+        nsf_terminated = await fetch_institution_grants(active_only=False, max_records_per_source=1000)
+        nsf_terminated = [g for g in nsf_terminated if g.get('award_status', '').lower() in ['terminated', 'cancelled', 'expired']]
+        all_terminated_grants = terminated_grants + nsf_terminated
+        
+        # Load PI department cache
+        pi_cache = load_pi_department_cache()
+        
+        # Filter terminated grants for this institution
+        institution_terminated_grants = []
+        for grant in all_terminated_grants:
+            org_info = grant.get("organization", {})
+            if isinstance(org_info, list) and len(org_info) > 0:
+                org_name = org_info[0].get("org_name", "")
+            elif isinstance(org_info, dict):
+                org_name = org_info.get("org_name", "")
+            else:
+                continue
+                
+            grant_institution = normalize_institution_name(org_name)
+            if grant_institution == normalized_institution:
+                institution_terminated_grants.append(grant)
+        
+        # Group grants by department
+        department_grants = defaultdict(list)
+        total_terminated_funding_by_dept = defaultdict(float)
+        
+        for grant in institution_terminated_grants:
+            pi_name = grant.get("contact_pi_name", "").strip()
+            funding_agency = grant.get("funding_agency", "Unknown")
+            award_amount = grant.get("award_amount", 0) or 0
+            
+            # Match PI to department
+            department = match_pi_to_department(pi_name, institution_name, pi_cache)
+            
+            # Add grant details
+            grant_detail = {
+                "pi_name": pi_name,
+                "project_title": grant.get("project_title", ""),
+                "award_amount": award_amount,
+                "funding_agency": funding_agency,
+                "project_start_date": grant.get("project_start_date", ""),
+                "project_end_date": grant.get("project_end_date", ""),
+                "fiscal_year": grant.get("fiscal_year", ""),
+                "award_id": grant.get("core_project_num", "") or grant.get("award_id", "")
+            }
+            
+            department_grants[department].append(grant_detail)
+            total_terminated_funding_by_dept[department] += award_amount
+        
+        # Calculate department statistics
+        department_stats = []
+        for dept, grants in department_grants.items():
+            total_funding = total_terminated_funding_by_dept[dept]
+            positions_at_risk = total_funding / 200000  # Assuming $200k per researcher
+            
+            # Count unique PIs
+            unique_pis = len(set(grant["pi_name"] for grant in grants if grant["pi_name"]))
+            
+            # Agency breakdown
+            agency_counts = defaultdict(int)
+            agency_funding = defaultdict(float)
+            for grant in grants:
+                agency = grant["funding_agency"]
+                agency_counts[agency] += 1
+                agency_funding[agency] += grant["award_amount"]
+            
+            department_stats.append({
+                "department": dept,
+                "total_terminated_funding": round(total_funding, 2),
+                "grants_count": len(grants),
+                "unique_pis": unique_pis,
+                "estimated_positions_at_risk": round(positions_at_risk, 1),
+                "agency_breakdown": {
+                    "counts": dict(agency_counts),
+                    "funding": {k: round(v, 2) for k, v in agency_funding.items()}
+                },
+                "grants": grants
+            })
+        
+        # Sort departments by funding at risk
+        department_stats.sort(key=lambda x: x["total_terminated_funding"], reverse=True)
+        
+        # Calculate overall university statistics
+        total_terminated_funding = sum(total_terminated_funding_by_dept.values())
+        total_active_funding = usaspending_funding.get('total_usaspending_funding', 0)
+        
+        return {
+            "institution": institution_name,
+            "normalized_name": normalized_institution,
+            "overview": {
+                "total_active_funding": round(total_active_funding, 2),
+                "total_terminated_funding": round(total_terminated_funding, 2),
+                "funding_cliff_percentage": round((total_terminated_funding / max(total_active_funding, 1)) * 100, 1),
+                "total_departments_affected": len(department_stats),
+                "total_pis_affected": sum(dept["unique_pis"] for dept in department_stats),
+                "total_grants_terminated": sum(dept["grants_count"] for dept in department_stats),
+                "estimated_total_positions_at_risk": round(total_terminated_funding / 200000, 1)
+            },
+            "funding_breakdown": {
+                "nih_funding": round(usaspending_funding.get('nih_funding', 0), 2),
+                "nsf_funding": round(usaspending_funding.get('nsf_funding', 0), 2),
+                "dod_funding": round(usaspending_funding.get('dod_funding', 0), 2),
+                "doe_funding": round(usaspending_funding.get('doe_funding', 0), 2),
+                "nasa_funding": round(usaspending_funding.get('nasa_funding', 0), 2),
+                "other_funding": round(usaspending_funding.get('other_funding', 0), 2),
+                "agencies_with_funding": len([f for f in [
+                    usaspending_funding.get('nih_funding', 0),
+                    usaspending_funding.get('nsf_funding', 0),
+                    usaspending_funding.get('dod_funding', 0),
+                    usaspending_funding.get('doe_funding', 0),
+                    usaspending_funding.get('nasa_funding', 0),
+                    usaspending_funding.get('other_funding', 0)
+                ] if f > 0])
+            },
+            "departments": department_stats,
+            "last_updated": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Error getting university details: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting university details: {str(e)}")
+
 async def generate_comprehensive_leaderboard(cost_per_researcher: float = 200000, limit: int = 20) -> dict:
     """
     Generate leaderboard using:
@@ -50,7 +225,13 @@ async def generate_comprehensive_leaderboard(cost_per_researcher: float = 200000
         print("Loading comprehensive USASpending.gov funding data from cache...")
         
         # Check cache stats
-        cache_stats = get_usaspending_stats()
+        try:
+            cache_stats = get_usaspending_stats()
+            print(f"DEBUG: Cache stats result: {cache_stats}")
+        except Exception as e:
+            print(f"DEBUG: Error getting cache stats: {e}")
+            cache_stats = None
+            
         if not cache_stats:
             return {
                 "error": "USASpending.gov cache not available",

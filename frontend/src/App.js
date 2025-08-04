@@ -31,7 +31,7 @@ function App() {
       setDetailsLoading(true);
       setError(null);
       
-      const response = await axios.get(`/api/institution-details?institution=${encodeURIComponent(institutionName)}`);
+      const response = await axios.get(`/api/university-details/${encodeURIComponent(institutionName)}`);
       setInstitutionDetails(response.data);
     } catch (err) {
       setError(`Failed to fetch institution details: ${err.message}`);
@@ -376,79 +376,197 @@ function App() {
             ← Back to Leaderboard
           </button>
           <h2 style={{ color: '#333', margin: '0 0 20px 0' }}>
-            {institution.institution} - Detailed Analysis
+            {institution.institution} - Cancelled Grants by Department
           </h2>
         </div>
 
         {detailsLoading && (
-          <div className="loading">Loading detailed institution data...</div>
+          <div className="loading">Loading university details...</div>
         )}
 
         {institutionDetails && (
           <div className="details-content">
-            <div className="details-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-              <div className="detail-card">
-                <h3>Risk Assessment</h3>
-                <div className="metric">
-                  <div className="metric-label">Risk Level</div>
-                  <div className={`metric-value ${institution.risk_level.toLowerCase()}`}>
-                    {institution.risk_level}
-                  </div>
+            {/* Overview Section */}
+            <div className="overview-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+              <h3>University Overview</h3>
+              <div className="overview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+                <div className="overview-metric">
+                  <div className="metric-label">Active Funding</div>
+                  <div className="metric-value">{formatCurrency(institutionDetails.overview.total_active_funding)}</div>
                 </div>
-                <div className="metric">
-                  <div className="metric-label">Risk Score</div>
-                  <div className="metric-value">{institution.risk_score}</div>
+                <div className="overview-metric">
+                  <div className="metric-label">Terminated Funding</div>
+                  <div className="metric-value">{formatCurrency(institutionDetails.overview.total_terminated_funding)}</div>
                 </div>
-              </div>
-
-              <div className="detail-card">
-                <h3>Lab Size & Impact</h3>
-                <div className="metric">
-                  <div className="metric-label">Estimated Lab Size</div>
-                  <div className="metric-value">{institution.estimated_lab_size} researchers</div>
-                </div>
-                <div className="metric">
-                  <div className="metric-label">At-Risk Positions</div>
-                  <div className="metric-value">{institution.at_risk_positions}</div>
-                </div>
-              </div>
-
-              <div className="detail-card">
-                <h3>Funding Status</h3>
-                <div className="metric">
-                  <div className="metric-label">Total Active Funding</div>
-                  <div className="metric-value">{formatCurrency(institution.total_active_funding)}</div>
-                </div>
-                <div className="metric">
+                <div className="overview-metric">
                   <div className="metric-label">Funding Cliff</div>
-                  <div className="metric-value">{institution.funding_cliff_percentage}%</div>
+                  <div className="metric-value">{institutionDetails.overview.funding_cliff_percentage}%</div>
+                </div>
+                <div className="overview-metric">
+                  <div className="metric-label">Departments Affected</div>
+                  <div className="metric-value">{institutionDetails.overview.total_departments_affected}</div>
+                </div>
+                <div className="overview-metric">
+                  <div className="metric-label">PIs Affected</div>
+                  <div className="metric-value">{institutionDetails.overview.total_pis_affected}</div>
+                </div>
+                <div className="overview-metric">
+                  <div className="metric-label">Positions at Risk</div>
+                  <div className="metric-value">{institutionDetails.overview.estimated_total_positions_at_risk}</div>
                 </div>
               </div>
             </div>
 
-            {institutionDetails.pi_details && (
-              <div className="pi-section">
-                <h3>Principal Investigators</h3>
-                <div className="pi-grid">
-                  {institutionDetails.pi_details.slice(0, 10).map((pi, index) => (
-                    <div key={index} className="pi-card">
-                      <div className="pi-name">{pi.name}</div>
-                      <div className="pi-department">{pi.department}</div>
-                      <div className="pi-grants">{pi.grant_count} grants • {formatCurrency(pi.total_funding)}</div>
-                      {pi.recent_grants && (
-                        <div className="recent-grants">
-                          {pi.recent_grants.slice(0, 2).map((grant, idx) => (
-                            <div key={idx} className="grant-item">
-                              {grant.title.substring(0, 60)}...
+            {/* Active Funding Breakdown */}
+            <div className="funding-breakdown-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#e8f5e8', borderRadius: '8px' }}>
+              <h3>Active Funding by Agency</h3>
+              <div className="funding-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+                {institutionDetails.funding_breakdown.nih_funding > 0 && (
+                  <div className="agency-funding">
+                    <strong>NIH:</strong> {formatCurrency(institutionDetails.funding_breakdown.nih_funding)}
+                  </div>
+                )}
+                {institutionDetails.funding_breakdown.nsf_funding > 0 && (
+                  <div className="agency-funding">
+                    <strong>NSF:</strong> {formatCurrency(institutionDetails.funding_breakdown.nsf_funding)}
+                  </div>
+                )}
+                {institutionDetails.funding_breakdown.dod_funding > 0 && (
+                  <div className="agency-funding">
+                    <strong>DoD:</strong> {formatCurrency(institutionDetails.funding_breakdown.dod_funding)}
+                  </div>
+                )}
+                {institutionDetails.funding_breakdown.doe_funding > 0 && (
+                  <div className="agency-funding">
+                    <strong>DoE:</strong> {formatCurrency(institutionDetails.funding_breakdown.doe_funding)}
+                  </div>
+                )}
+                {institutionDetails.funding_breakdown.nasa_funding > 0 && (
+                  <div className="agency-funding">
+                    <strong>NASA:</strong> {formatCurrency(institutionDetails.funding_breakdown.nasa_funding)}
+                  </div>
+                )}
+                {institutionDetails.funding_breakdown.other_funding > 0 && (
+                  <div className="agency-funding">
+                    <strong>Other:</strong> {formatCurrency(institutionDetails.funding_breakdown.other_funding)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Departments with Cancelled Grants */}
+            <div className="departments-section">
+              <h3>Departments with Cancelled Grants</h3>
+              {institutionDetails.departments && institutionDetails.departments.length > 0 ? (
+                <div className="departments-list">
+                  {institutionDetails.departments.map((dept, index) => (
+                    <div key={index} className="department-card" style={{ 
+                      border: '1px solid #ddd', 
+                      borderRadius: '8px', 
+                      padding: '20px', 
+                      marginBottom: '20px',
+                      backgroundColor: dept.total_terminated_funding > 1000000 ? '#ffebee' : '#f9f9f9'
+                    }}>
+                      <div className="department-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                        <h4 style={{ margin: 0, color: '#333' }}>{dept.department}</h4>
+                        <div className="department-summary" style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>
+                            {formatCurrency(dept.total_terminated_funding)}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            {dept.grants_count} grants • {dept.unique_pis} PIs
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="department-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+                        <div className="dept-metric">
+                          <div style={{ fontSize: '12px', color: '#666' }}>Positions at Risk</div>
+                          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.estimated_positions_at_risk}</div>
+                        </div>
+                        <div className="dept-metric">
+                          <div style={{ fontSize: '12px', color: '#666' }}>Grants Lost</div>
+                          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.grants_count}</div>
+                        </div>
+                        <div className="dept-metric">
+                          <div style={{ fontSize: '12px', color: '#666' }}>Unique PIs</div>
+                          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.unique_pis}</div>
+                        </div>
+                      </div>
+
+                      {/* Agency breakdown */}
+                      <div className="agency-breakdown" style={{ marginBottom: '15px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Funding by Agency:</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                          {Object.entries(dept.agency_breakdown.funding).map(([agency, amount]) => (
+                            <div key={agency} style={{ 
+                              padding: '4px 8px', 
+                              backgroundColor: '#e3f2fd', 
+                              borderRadius: '4px', 
+                              fontSize: '12px' 
+                            }}>
+                              {agency}: {formatCurrency(amount)}
                             </div>
                           ))}
                         </div>
-                      )}
+                      </div>
+
+                      {/* Sample grants */}
+                      <div className="grants-preview">
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                          Sample Cancelled Grants:
+                        </div>
+                        <div className="grants-list">
+                          {dept.grants.slice(0, 3).map((grant, grantIndex) => (
+                            <div key={grantIndex} className="grant-item" style={{ 
+                              padding: '10px', 
+                              border: '1px solid #e0e0e0', 
+                              borderRadius: '4px', 
+                              marginBottom: '8px',
+                              backgroundColor: 'white'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div style={{ flex: 1, marginRight: '10px' }}>
+                                  <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>
+                                    {grant.pi_name}
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                                    {grant.project_title.length > 80 ? 
+                                      grant.project_title.substring(0, 80) + '...' : 
+                                      grant.project_title
+                                    }
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#888' }}>
+                                    {grant.funding_agency} • {grant.award_id}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                                    {formatCurrency(grant.award_amount)}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#666' }}>
+                                    {grant.project_start_date} - {grant.project_end_date}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {dept.grants.length > 3 && (
+                            <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
+                              ... and {dept.grants.length - 3} more grants
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                  No cancelled grants found for this institution, or department information not available.
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

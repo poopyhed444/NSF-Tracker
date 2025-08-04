@@ -13,7 +13,9 @@ from collections import defaultdict
 
 class USASpendingCacheLoader:
     def __init__(self):
-        self.cache_file = os.path.join("grant_cache", "usaspending_university_funding.json")
+        # Use absolute path to ensure we find the cache file regardless of CWD
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        self.cache_file = os.path.join(backend_dir, "grant_cache", "usaspending_university_funding.json")
         self._cache_data = None
         
     def load_cache(self) -> Optional[Dict[str, Any]]:
