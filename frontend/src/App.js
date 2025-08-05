@@ -5,10 +5,15 @@ function App() {
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [selectedInstitution, setSelectedInstitution] = useState(null);
   const [institutionDetails, setInstitutionDetails] = useState(null);
+  const [delayedFundingData, setDelayedFundingData] = useState(null);
+  const [delayedFundingDepartments, setDelayedFundingDepartments] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [delayedFundingLoading, setDelayedFundingLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [showDelayedFundingAnalysis, setShowDelayedFundingAnalysis] = useState(false);
+  const [showDepartmentDelayedFunding, setShowDepartmentDelayedFunding] = useState(false);
 
   const fetchLeaderboard = async () => {
     try {
@@ -38,6 +43,38 @@ function App() {
       console.error('Error fetching institution details:', err);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const fetchDelayedFundingAnalysis = async (institutionName) => {
+    try {
+      setDelayedFundingLoading(true);
+      setError(null);
+      
+      const response = await axios.get(`/api/delayed-funding/${encodeURIComponent(institutionName)}`);
+      setDelayedFundingData(response.data);
+      setShowDelayedFundingAnalysis(true);
+    } catch (err) {
+      setError(`Failed to fetch delayed funding analysis: ${err.message}`);
+      console.error('Error fetching delayed funding analysis:', err);
+    } finally {
+      setDelayedFundingLoading(false);
+    }
+  };
+
+  const fetchDelayedFundingByDepartments = async (institutionName) => {
+    try {
+      setDelayedFundingLoading(true);
+      setError(null);
+      
+      const response = await axios.get(`/api/delayed-funding-departments/${encodeURIComponent(institutionName)}`);
+      setDelayedFundingDepartments(response.data);
+      setShowDepartmentDelayedFunding(true);
+    } catch (err) {
+      setError(`Failed to fetch delayed funding by departments: ${err.message}`);
+      console.error('Error fetching delayed funding by departments:', err);
+    } finally {
+      setDelayedFundingLoading(false);
     }
   };
 
@@ -360,21 +397,50 @@ function App() {
     return (
       <div className="institution-details">
         <div className="details-header">
-          <button 
-            onClick={onBack}
-            className="back-button"
-            style={{
-              padding: '8px 16px',
-              border: '1px solid #667eea',
-              borderRadius: '5px',
-              background: 'white',
-              color: '#667eea',
-              cursor: 'pointer',
-              marginBottom: '20px'
-            }}
-          >
-            ← Back to Leaderboard
-          </button>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+            <button 
+              onClick={onBack}
+              className="back-button"
+              style={{
+                padding: '8px 16px',
+                border: '1px solid #667eea',
+                borderRadius: '5px',
+                background: 'white',
+                color: '#667eea',
+                cursor: 'pointer'
+              }}
+            >
+              ← Back to Leaderboard
+            </button>
+            <button 
+              onClick={() => fetchDelayedFundingAnalysis(institution.institution)}
+              disabled={delayedFundingLoading}
+              style={{
+                padding: '8px 16px',
+                border: '1px solid #ff9800',
+                borderRadius: '5px',
+                background: delayedFundingLoading ? '#f5f5f5' : 'white',
+                color: delayedFundingLoading ? '#999' : '#ff9800',
+                cursor: delayedFundingLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {delayedFundingLoading ? 'Loading...' : '💰 Cash Flow Analysis'}
+            </button>
+            <button 
+              onClick={() => fetchDelayedFundingByDepartments(institution.institution)}
+              disabled={delayedFundingLoading}
+              style={{
+                padding: '8px 16px',
+                border: '1px solid #9c27b0',
+                borderRadius: '5px',
+                background: delayedFundingLoading ? '#f5f5f5' : 'white',
+                color: delayedFundingLoading ? '#999' : '#9c27b0',
+                cursor: delayedFundingLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {delayedFundingLoading ? 'Loading...' : '🏢 Delayed Funding by Department'}
+            </button>
+          </div>
           <h2 style={{ color: '#333', margin: '0 0 20px 0' }}>
             {institution.institution} - Cancelled Grants by Department
           </h2>
@@ -453,6 +519,87 @@ function App() {
                 )}
               </div>
             </div>
+
+            {/* Delayed Funding Analysis */}
+            {institutionDetails.delayed_funding && (
+              <div className="delayed-funding-section" style={{ 
+                marginBottom: '30px', 
+                padding: '20px', 
+                backgroundColor: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '#ffebee' : 
+                                institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' ? '#fff3e0' : '#f3e5f5', 
+                borderRadius: '8px',
+                border: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '2px solid #f44336' :
+                        institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' ? '2px solid #ff9800' : '1px solid #ddd'
+              }}>
+                <h3 style={{ color: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '#d32f2f' : '#333' }}>
+                  Cash Flow & Delayed Funding Analysis
+                  {institutionDetails.delayed_funding.cash_flow_risk !== 'UNKNOWN' && (
+                    <span style={{ 
+                      marginLeft: '10px', 
+                      padding: '4px 8px', 
+                      borderRadius: '4px', 
+                      fontSize: '12px', 
+                      backgroundColor: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '#f44336' : 
+                                      institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' ? '#ff9800' : '#4caf50',
+                      color: 'white'
+                    }}>
+                      {institutionDetails.delayed_funding.cash_flow_risk}
+                    </span>
+                  )}
+                </h3>
+                {institutionDetails.delayed_funding.note ? (
+                  <div style={{ fontStyle: 'italic', color: '#666' }}>
+                    {institutionDetails.delayed_funding.note}
+                  </div>
+                ) : (
+                  <div className="delayed-funding-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+                    <div className="delayed-funding-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Undisbursed Amount</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>
+                        {formatCurrency(institutionDetails.delayed_funding.undisbursed_amount)}
+                      </div>
+                    </div>
+                    <div className="delayed-funding-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Disbursement Efficiency</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+                        {institutionDetails.delayed_funding.disbursement_efficiency}
+                      </div>
+                    </div>
+                    <div className="delayed-funding-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Awards with Delays</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+                        {institutionDetails.delayed_funding.delayed_awards_count}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' && (
+                  <div style={{ 
+                    marginTop: '15px', 
+                    padding: '10px', 
+                    backgroundColor: '#ffcdd2', 
+                    borderRadius: '4px', 
+                    fontSize: '14px',
+                    border: '1px solid #f44336'
+                  }}>
+                    <strong>⚠️ Critical Cash Flow Risk:</strong> This institution has significant delayed funding that may impact research operations. 
+                    Immediate attention to disbursement delays is recommended.
+                  </div>
+                )}
+                {institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' && (
+                  <div style={{ 
+                    marginTop: '15px', 
+                    padding: '10px', 
+                    backgroundColor: '#ffe0b2', 
+                    borderRadius: '4px', 
+                    fontSize: '14px',
+                    border: '1px solid #ff9800'
+                  }}>
+                    <strong>⚠️ High Cash Flow Risk:</strong> Monitor disbursement delays closely as they may affect research continuity.
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Departments with Cancelled Grants */}
             <div className="departments-section">
@@ -573,6 +720,384 @@ function App() {
     );
   };
 
+  const DelayedFundingAnalysis = ({ data, onBack }) => {
+    if (!data) return null;
+
+    return (
+      <div className="delayed-funding-analysis">
+        <div className="details-header">
+          <button 
+            onClick={onBack}
+            className="back-button"
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #667eea',
+              borderRadius: '5px',
+              background: 'white',
+              color: '#667eea',
+              cursor: 'pointer',
+              marginBottom: '20px'
+            }}
+          >
+            ← Back to Leaderboard
+          </button>
+          <h2 style={{ color: '#333', margin: '0 0 20px 0' }}>
+            {data.institution} - Delayed Funding Analysis
+          </h2>
+        </div>
+
+        {/* Risk Overview */}
+        <div className="risk-overview" style={{ 
+          marginBottom: '30px', 
+          padding: '20px', 
+          backgroundColor: data.cash_flow_risk.level === 'CRITICAL' ? '#ffebee' : 
+                          data.cash_flow_risk.level === 'HIGH' ? '#fff3e0' : '#e8f5e8',
+          borderRadius: '8px',
+          border: data.cash_flow_risk.level === 'CRITICAL' ? '2px solid #f44336' :
+                  data.cash_flow_risk.level === 'HIGH' ? '2px solid #ff9800' : '1px solid #4caf50'
+        }}>
+          <h3 style={{ 
+            color: data.cash_flow_risk.level === 'CRITICAL' ? '#d32f2f' : 
+                   data.cash_flow_risk.level === 'HIGH' ? '#f57c00' : '#2e7d32' 
+          }}>
+            Cash Flow Risk Assessment: {data.cash_flow_risk.level}
+            <span style={{ 
+              marginLeft: '15px', 
+              fontSize: '24px', 
+              fontWeight: 'bold' 
+            }}>
+              Score: {data.cash_flow_risk.score}
+            </span>
+          </h3>
+          <div style={{ fontSize: '16px', marginBottom: '15px' }}>
+            <strong>Severity:</strong> {data.cash_flow_risk.severity}
+          </div>
+          {data.cash_flow_risk.risk_factors.length > 0 && (
+            <div>
+              <strong>Risk Factors:</strong>
+              <ul style={{ marginTop: '8px' }}>
+                {data.cash_flow_risk.risk_factors.map((factor, index) => (
+                  <li key={index} style={{ marginBottom: '4px' }}>{factor}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Financial Overview */}
+        <div className="financial-overview" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+          <h3>Financial Overview</h3>
+          <div className="financial-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+            <div className="financial-metric">
+              <div className="metric-label">Total Awarded</div>
+              <div className="metric-value">{formatCurrency(data.financial_overview.total_awarded)}</div>
+            </div>
+            <div className="financial-metric">
+              <div className="metric-label">Total Disbursed</div>
+              <div className="metric-value">{formatCurrency(data.financial_overview.total_disbursed)}</div>
+            </div>
+            <div className="financial-metric">
+              <div className="metric-label">Undisbursed Amount</div>
+              <div className="metric-value" style={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                {formatCurrency(data.financial_overview.undisbursed_amount)}
+              </div>
+            </div>
+            <div className="financial-metric">
+              <div className="metric-label">Disbursement Efficiency</div>
+              <div className="metric-value">{data.financial_overview.disbursement_efficiency}</div>
+            </div>
+            <div className="financial-metric">
+              <div className="metric-label">Undisbursed Percentage</div>
+              <div className="metric-value">{data.financial_overview.undisbursed_percentage}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Delayed Awards Details */}
+        <div className="delayed-awards" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
+          <h3>Delayed Awards Analysis</h3>
+          <div className="delayed-awards-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+            <div>
+              <strong>Awards with Delays:</strong> {data.delayed_awards.count}
+            </div>
+            <div>
+              <strong>Total Awards:</strong> {data.delayed_awards.total_awards_analyzed}
+            </div>
+            <div>
+              <strong>Delay Frequency:</strong> {data.delayed_awards.delay_frequency}
+            </div>
+          </div>
+          
+          {data.delayed_awards.awards_details.length > 0 && (
+            <div>
+              <h4>Most Delayed Awards:</h4>
+              {data.delayed_awards.awards_details.slice(0, 3).map((award, index) => (
+                <div key={index} style={{ 
+                  padding: '10px', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '4px', 
+                  marginBottom: '10px',
+                  backgroundColor: 'white'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ flex: 1 }}>
+                      <div><strong>Award ID:</strong> {award.award_id}</div>
+                      <div><strong>Agency:</strong> {award.agency}</div>
+                      <div><strong>Description:</strong> {award.description || 'N/A'}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                        {formatCurrency(award.undisbursed_amount)} undisbursed
+                      </div>
+                      <div>Disbursement: {(award.disbursement_rate * 100).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Implications and Recommendations */}
+        <div className="implications" style={{ padding: '20px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
+          <h3>Implications & Recommendations</h3>
+          <div style={{ marginBottom: '15px' }}>
+            <strong>Cash Flow Impact:</strong> {data.implications.estimated_cash_flow_impact}
+          </div>
+          <div style={{ marginBottom: '15px' }}>
+            <strong>Operational Risk:</strong> {data.implications.operational_risk}
+          </div>
+          {data.implications.recommended_actions.filter(action => action).length > 0 && (
+            <div>
+              <strong>Recommended Actions:</strong>
+              <ul style={{ marginTop: '8px' }}>
+                {data.implications.recommended_actions.filter(action => action).map((action, index) => (
+                  <li key={index} style={{ marginBottom: '4px' }}>{action}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const DepartmentDelayedFundingAnalysis = ({ data, onBack }) => {
+    if (!data || data.error) {
+      return (
+        <div className="delayed-funding-analysis">
+          <div className="details-header">
+            <button onClick={onBack} style={{ padding: '8px 16px', border: '1px solid #667eea', borderRadius: '5px', background: 'white', color: '#667eea', cursor: 'pointer', marginBottom: '20px' }}>
+              ← Back to Leaderboard
+            </button>
+            <h2>{data?.institution || 'Institution'} - Delayed Funding by Department</h2>
+          </div>
+          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+            {data?.error || 'No delayed funding data available by department.'}
+            {data?.note && <div style={{ marginTop: '10px', fontSize: '14px' }}>{data.note}</div>}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="delayed-funding-analysis">
+        <div className="details-header">
+          <button onClick={onBack} style={{ padding: '8px 16px', border: '1px solid #667eea', borderRadius: '5px', background: 'white', color: '#667eea', cursor: 'pointer', marginBottom: '20px' }}>
+            ← Back to Leaderboard
+          </button>
+          <h2 style={{ color: '#333', margin: '0 0 20px 0' }}>
+            {data.institution} - Delayed Funding by Department
+          </h2>
+        </div>
+
+        {/* Overview Section */}
+        <div className="overview-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+          <h3>Institution Overview</h3>
+          <div className="overview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+            <div className="overview-metric">
+              <div className="metric-label">Total Undisbursed</div>
+              <div className="metric-value">{formatCurrency(data.overview.total_undisbursed)}</div>
+            </div>
+            <div className="overview-metric">
+              <div className="metric-label">Cash Flow Risk</div>
+              <div className="metric-value" style={{ color: data.overview.cash_flow_risk === 'CRITICAL' ? '#d32f2f' : data.overview.cash_flow_risk === 'HIGH' ? '#f57c00' : '#2e7d32' }}>
+                {data.overview.cash_flow_risk}
+              </div>
+            </div>
+            <div className="overview-metric">
+              <div className="metric-label">Disbursement Efficiency</div>
+              <div className="metric-value">{data.overview.disbursement_efficiency}</div>
+            </div>
+            <div className="overview-metric">
+              <div className="metric-label">Departments Affected</div>
+              <div className="metric-value">{data.overview.departments_affected}</div>
+            </div>
+            <div className="overview-metric">
+              <div className="metric-label">High Risk Departments</div>
+              <div className="metric-value">{data.overview.high_risk_departments}</div>
+            </div>
+            <div className="overview-metric">
+              <div className="metric-label">Positions Affected</div>
+              <div className="metric-value">{data.institutional_impact.total_positions_potentially_affected}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Risk Summary */}
+        <div className="risk-summary" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
+          <h3>Risk Distribution</h3>
+          <div className="risk-distribution" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
+            {Object.entries(data.department_analysis.summary_by_risk).map(([risk, count]) => (
+              <div key={risk} style={{ textAlign: 'center', padding: '10px', backgroundColor: 'white', borderRadius: '4px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: risk === 'CRITICAL' ? '#d32f2f' : risk === 'HIGH' ? '#f57c00' : risk === 'MEDIUM' ? '#ff9800' : '#4caf50' }}>
+                  {count}
+                </div>
+                <div style={{ fontSize: '12px', textTransform: 'capitalize' }}>{risk.toLowerCase()}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Departments with Delayed Funding */}
+        <div className="departments-section">
+          <h3>Departments with Delayed Funding</h3>
+          {data.department_analysis.departments && data.department_analysis.departments.length > 0 ? (
+            <div className="departments-list">
+              {data.department_analysis.departments.map((dept, index) => (
+                <div key={index} className="department-card" style={{ 
+                  border: '1px solid #ddd', 
+                  borderRadius: '8px', 
+                  padding: '20px', 
+                  marginBottom: '20px',
+                  backgroundColor: dept.risk_level === 'CRITICAL' ? '#ffebee' : 
+                                  dept.risk_level === 'HIGH' ? '#fff3e0' : '#f9f9f9',
+                  borderLeft: `5px solid ${dept.risk_level === 'CRITICAL' ? '#f44336' : dept.risk_level === 'HIGH' ? '#ff9800' : '#4caf50'}`
+                }}>
+                  <div className="department-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h4 style={{ margin: 0, color: '#333' }}>{dept.department}</h4>
+                    <div className="department-summary" style={{ textAlign: 'right' }}>
+                      <div style={{ 
+                        fontSize: '12px', 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: dept.risk_level === 'CRITICAL' ? '#f44336' : dept.risk_level === 'HIGH' ? '#ff9800' : '#4caf50',
+                        color: 'white',
+                        marginBottom: '5px'
+                      }}>
+                        {dept.risk_level} RISK
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>
+                        {formatCurrency(dept.total_undisbursed)}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {dept.awards_count} awards • {dept.delayed_awards_count} delayed
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="department-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+                    <div className="dept-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Awarded</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{formatCurrency(dept.total_awarded)}</div>
+                    </div>
+                    <div className="dept-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Disbursed</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{formatCurrency(dept.total_disbursed)}</div>
+                    </div>
+                    <div className="dept-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Efficiency</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.disbursement_efficiency}%</div>
+                    </div>
+                    <div className="dept-metric">
+                      <div style={{ fontSize: '12px', color: '#666' }}>Positions Affected</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.estimated_positions_affected}</div>
+                    </div>
+                  </div>
+
+                  {/* Most Impacted Awards */}
+                  {dept.most_impacted_awards && dept.most_impacted_awards.length > 0 && (
+                    <div className="most-impacted-awards">
+                      <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+                        Most Impacted Awards:
+                      </div>
+                      <div className="awards-list">
+                        {dept.most_impacted_awards.slice(0, 2).map((award, awardIndex) => (
+                          <div key={awardIndex} className="award-item" style={{ 
+                            padding: '10px', 
+                            border: '1px solid #e0e0e0', 
+                            borderRadius: '4px', 
+                            marginBottom: '8px',
+                            backgroundColor: 'white'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div style={{ flex: 1, marginRight: '10px' }}>
+                                <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>
+                                  {award.pi_name} • {award.award_id}
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                                  {award.description || 'No description available'}
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#888' }}>
+                                  {award.agency} • {award.start_date} - {award.end_date}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                                  {formatCurrency(award.undisbursed_amount)} undisbursed
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#666' }}>
+                                  {(award.disbursement_rate * 100).toFixed(1)}% disbursed
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+              No departments with delayed funding found.
+            </div>
+          )}
+        </div>
+
+        {/* Recommendations */}
+        {data.recommendations && (
+          <div className="recommendations" style={{ padding: '20px', backgroundColor: '#e8f5e8', borderRadius: '8px' }}>
+            <h3>Recommendations</h3>
+            {data.recommendations.priority_departments && (
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Priority Departments:</strong>
+                <ul style={{ marginTop: '8px' }}>
+                  {data.recommendations.priority_departments.map((rec, index) => (
+                    <li key={index} style={{ marginBottom: '4px' }}>
+                      <strong>{rec.department}:</strong> {rec.action} ({formatCurrency(rec.undisbursed_amount)} undisbursed)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.recommendations.next_steps && (
+              <div>
+                <strong>Next Steps:</strong>
+                <ul style={{ marginTop: '8px' }}>
+                  {data.recommendations.next_steps.map((step, index) => (
+                    <li key={index} style={{ marginBottom: '4px' }}>{step}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -606,7 +1131,23 @@ function App() {
         <p>Real-time analysis of federal funding risks across research institutions</p>
       </div>
 
-      {selectedInstitution ? (
+      {showDepartmentDelayedFunding && delayedFundingDepartments ? (
+        <DepartmentDelayedFundingAnalysis 
+          data={delayedFundingDepartments} 
+          onBack={() => {
+            setShowDepartmentDelayedFunding(false);
+            setDelayedFundingDepartments(null);
+          }} 
+        />
+      ) : showDelayedFundingAnalysis && delayedFundingData ? (
+        <DelayedFundingAnalysis 
+          data={delayedFundingData} 
+          onBack={() => {
+            setShowDelayedFundingAnalysis(false);
+            setDelayedFundingData(null);
+          }} 
+        />
+      ) : selectedInstitution ? (
         <InstitutionDetails 
           institution={selectedInstitution} 
           onBack={() => {
