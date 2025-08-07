@@ -237,153 +237,345 @@ async def get_university_details(institution_name: str):
         raise HTTPException(status_code=500, detail=f"Error getting university details: {str(e)}")
 
 @app.get("/api/delayed-funding/{institution_name}")
-async def get_delayed_funding_analysis(institution_name: str):
-    """Get delayed funding analysis for an institution - tracks undisbursed awards and cash flow risk"""
+async def get_comprehensive_delayed_funding_analysis(institution_name: str, include_departments: bool = True, method: str = "comprehensive"):
+    """
+    Comprehensive delayed funding analysis combining:
+    - Enhanced Times-style renewal analysis
+    - Disbursement tracking
+    - Department-level breakdown
+    - Risk assessment and recommendations
+    
+    Parameters:
+    - include_departments: Include department-level analysis
+    - method: 'disbursement', 'renewal', or 'comprehensive' (default)
+    """
     try:
-        print(f"Analyzing delayed funding for: {institution_name}")
+        print(f"🔍 DEBUG: Comprehensive delayed funding analysis for: {institution_name} (method: {method}, departments: {include_departments})")
+        print(f"🔍 DEBUG: Method is: '{method}', checking if in ['comprehensive', 'renewal']")
         
-        # Get delayed funding analysis
-        delayed_funding_data = await analyze_delayed_funding_for_institution(institution_name)
+        # Check cache first
+        cache_key = f"comprehensive_delayed_funding_{institution_name}_{method}_{include_departments}"
+        cached_result = None
+        try:
+            from grant_cache import get_combined_cache
+            cached_data = get_combined_cache()
+            if cached_data:
+                for item in cached_data:
+                    if item.get('cache_key') == cache_key:
+                        # Check if cache is still valid (1 hour)
+                        cache_time = datetime.fromisoformat(item.get('cached_at', '2000-01-01'))
+                        if (datetime.now() - cache_time).total_seconds() < 3600:  # 1 hour cache
+                            print(f"Using cached result for {institution_name}")
+                            cached_result = item.get('data')
+                            break
+        except Exception as e:
+            print(f"Cache check error: {e}")
         
-        if not delayed_funding_data:
-            return {
-                "institution": institution_name,
-                "error": "No disbursement data available",
-                "note": "Institution may not have recent federal awards or data is not available"
-            }
+        if cached_result:
+            return cached_result
         
-        # Enhance the analysis with risk insights
-        analysis = delayed_funding_data['disbursement_analysis']
-        summary = delayed_funding_data['summary']
-        
-        # Calculate additional metrics
-        risk_factors = []
-        if analysis['delayed_funding_risk'] >= 50:
-            risk_factors.append("High percentage of undisbursed awards")
-        if analysis['disbursement_efficiency'] < 0.6:
-            risk_factors.append("Low disbursement efficiency")
-        if analysis['delayed_awards_count'] > 5:
-            risk_factors.append("Multiple awards with significant delays")
-        if analysis['undisbursed_amount'] > 10000000:  # $10M+
-            risk_factors.append("Large absolute amount of undisbursed funding")
-        
-        # Enhanced response with actionable insights
-        return {
+        # Initialize result structure
+        result = {
             "institution": institution_name,
-            "analysis_date": delayed_funding_data['analysis_date'],
-            "cash_flow_risk": {
-                "level": summary['cash_flow_risk'],
-                "score": summary['delayed_funding_risk_score'],
-                "risk_factors": risk_factors,
-                "severity": "IMMEDIATE ATTENTION" if summary['delayed_funding_risk_score'] >= 75 else 
-                          "MONITOR CLOSELY" if summary['delayed_funding_risk_score'] >= 50 else
-                          "STABLE" if summary['delayed_funding_risk_score'] >= 25 else "LOW RISK"
-            },
+            "analysis_date": datetime.now().isoformat(),
+            "methodology": "Comprehensive delayed funding analysis",
+            "cash_flow_risk": {"level": "UNKNOWN", "score": 0, "risk_factors": [], "severity": "UNKNOWN"},
             "financial_overview": {
-                "total_awarded": round(analysis['total_awarded_amount'], 2),
-                "total_obligated": round(analysis['total_obligated_amount'], 2),
-                "total_disbursed": round(analysis['total_outlayed_amount'], 2),
-                "undisbursed_amount": round(analysis['undisbursed_amount'], 2),
-                "disbursement_efficiency": f"{analysis['disbursement_efficiency']*100:.1f}%",
-                "undisbursed_percentage": f"{(analysis['undisbursed_amount']/max(analysis['total_awarded_amount'], 1))*100:.1f}%"
+                "total_awarded": 0,
+                "total_obligated": 0,
+                "total_disbursed": 0,
+                "undisbursed_amount": 0,
+                "disbursement_efficiency": "0.0%",
+                "undisbursed_percentage": "0.0%"
             },
-            "delayed_awards": {
-                "count": analysis['delayed_awards_count'],
-                "total_awards_analyzed": analysis['total_awards'],
-                "delay_frequency": f"{(analysis['delayed_awards_count']/max(analysis['total_awards'], 1))*100:.1f}%",
-                "awards_details": analysis['awards_with_delays'][:5]  # Top 5 most delayed
-            },
+            "delayed_awards": {"count": 0, "total_awards_analyzed": 0, "delay_frequency": "0.0%", "awards_details": []},
             "implications": {
-                "estimated_cash_flow_impact": "HIGH" if analysis['undisbursed_amount'] > 20000000 else
-                                            "MEDIUM" if analysis['undisbursed_amount'] > 5000000 else "LOW",
-                "operational_risk": "Research operations may be constrained by delayed disbursements" if summary['delayed_funding_risk_score'] >= 50 else
-                                  "Minimal impact on research operations expected",
-                "recommended_actions": [
-                    "Contact agency program officers to expedite disbursements" if analysis['delayed_awards_count'] > 3 else None,
-                    "Review grant compliance and reporting requirements" if analysis['disbursement_efficiency'] < 0.5 else None,
-                    "Consider bridge funding for critical research activities" if analysis['undisbursed_amount'] > 10000000 else None,
-                    "Monitor cash flow closely for next 6 months" if summary['delayed_funding_risk_score'] >= 50 else None
-                ]
-            },
-            "sample_delayed_awards": delayed_funding_data.get('raw_disbursement_data', [])[:3],
-            "last_updated": datetime.now().isoformat()
+                "estimated_cash_flow_impact": "LOW",
+                "operational_risk": "Minimal impact expected",
+                "recommended_actions": []
+            }
         }
         
+        # 1. Standard disbursement analysis
+        disbursement_analysis = None
+        try:
+            disbursement_data = await analyze_delayed_funding_for_institution(institution_name)
+            if disbursement_data and not disbursement_data.get('error'):
+                disbursement_analysis = disbursement_data
+                analysis = disbursement_data['disbursement_analysis']
+                summary = disbursement_data['summary']
+                
+                # Update financial overview
+                result["financial_overview"] = {
+                    "total_awarded": round(analysis.get('total_awarded_amount', 0), 2),
+                    "total_obligated": round(analysis.get('total_obligated_amount', 0), 2),
+                    "total_disbursed": round(analysis.get('total_outlayed_amount', 0), 2),
+                    "undisbursed_amount": round(analysis.get('undisbursed_amount', 0), 2),
+                    "disbursement_efficiency": f"{analysis.get('disbursement_efficiency', 0)*100:.1f}%",
+                    "undisbursed_percentage": f"{(analysis.get('undisbursed_amount', 0)/max(analysis.get('total_awarded_amount', 1), 1))*100:.1f}%"
+                }
+                
+                # Update delayed awards
+                result["delayed_awards"] = {
+                    "count": analysis.get('delayed_awards_count', 0),
+                    "total_awards_analyzed": analysis.get('total_awards', 0),
+                    "delay_frequency": f"{(analysis.get('delayed_awards_count', 0)/max(analysis.get('total_awards', 1), 1))*100:.1f}%",
+                    "awards_details": analysis.get('awards_with_delays', [])[:5]
+                }
+                
+                # Calculate risk factors
+                risk_factors = []
+                risk_score = summary.get('delayed_funding_risk_score', 0)
+                if analysis.get('delayed_funding_risk', 0) >= 50:
+                    risk_factors.append("High percentage of undisbursed awards")
+                if analysis.get('disbursement_efficiency', 1) < 0.6:
+                    risk_factors.append("Low disbursement efficiency")
+                if analysis.get('delayed_awards_count', 0) > 5:
+                    risk_factors.append("Multiple awards with significant delays")
+                if analysis.get('undisbursed_amount', 0) > 10000000:
+                    risk_factors.append("Large absolute amount of undisbursed funding")
+                
+                # Update cash flow risk
+                result["cash_flow_risk"] = {
+                    "level": summary.get('cash_flow_risk', 'UNKNOWN'),
+                    "score": risk_score,
+                    "risk_factors": risk_factors,
+                    "severity": "IMMEDIATE ATTENTION" if risk_score >= 75 else 
+                              "MONITOR CLOSELY" if risk_score >= 50 else
+                              "STABLE" if risk_score >= 25 else "LOW RISK"
+                }
+                
+                # Update implications
+                result["implications"] = {
+                    "estimated_cash_flow_impact": "HIGH" if analysis.get('undisbursed_amount', 0) > 20000000 else
+                                                "MEDIUM" if analysis.get('undisbursed_amount', 0) > 5000000 else "LOW",
+                    "operational_risk": "Research operations may be constrained by delayed disbursements" if risk_score >= 50 else
+                                      "Minimal impact on research operations expected",
+                    "recommended_actions": [action for action in [
+                        "Contact agency program officers to expedite disbursements" if analysis.get('delayed_awards_count', 0) > 3 else None,
+                        "Review grant compliance and reporting requirements" if analysis.get('disbursement_efficiency', 1) < 0.5 else None,
+                        "Consider bridge funding for critical research activities" if analysis.get('undisbursed_amount', 0) > 10000000 else None,
+                        "Monitor cash flow closely for next 6 months" if risk_score >= 50 else None
+                    ] if action is not None]
+                }
+        except Exception as e:
+            print(f"Disbursement analysis error: {e}")
+        
+        # 2. Enhanced Times-style analysis (if method allows)
+        enhanced_analysis = None
+        if method in ["comprehensive", "renewal"]:
+            try:
+                print(f"Starting enhanced analysis for {institution_name}...")
+                from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+                enhanced_tracker = EnhancedDelayedFundingTracker()
+                pi_cache = load_pi_department_cache()
+                enhanced_data = await enhanced_tracker.analyze_comprehensive_delays(institution_name, pi_cache)
+                print(f"Enhanced analysis completed. Keys: {list(enhanced_data.keys()) if enhanced_data else 'None'}")
+                
+                if enhanced_data and not enhanced_data.get('error'):
+                    enhanced_analysis = enhanced_data
+                    
+                    # Add enhanced methodology info
+                    result["methodology"] = "Enhanced Times-style analysis + disbursement tracking"
+                    result["enhanced_analysis"] = {
+                        "overall_risk_level": enhanced_data.get('overall_risk_level', 'UNKNOWN'),
+                        "combined_risk_score": enhanced_data.get('combined_risk_score', 0),
+                        "total_at_risk_funding": enhanced_data.get('total_at_risk', 0),
+                        "immediate_concerns": enhanced_data.get('immediate_concerns', []),
+                        "renewal_analysis": enhanced_data.get('renewal_analysis', {}),
+                        "disbursement_analysis": enhanced_data.get('disbursement_analysis', {})
+                    }
+                    print(f"Enhanced analysis added to result")
+                    
+                    # Update risk assessment if enhanced data suggests higher risk
+                    enhanced_risk_score = enhanced_data.get('combined_risk_score', 0)
+                    if enhanced_risk_score > result["cash_flow_risk"]["score"]:
+                        result["cash_flow_risk"]["score"] = enhanced_risk_score
+                        result["cash_flow_risk"]["level"] = enhanced_data.get('overall_risk_level', result["cash_flow_risk"]["level"])
+                        
+                        # Add enhanced concerns to risk factors
+                        enhanced_concerns = enhanced_data.get('immediate_concerns', [])
+                        if enhanced_concerns:
+                            result["cash_flow_risk"]["risk_factors"].extend(enhanced_concerns)
+                    
+                    # Add enhanced recommendations
+                    enhanced_actions = enhanced_data.get('recommended_actions', [])
+                    if enhanced_actions:
+                        result["implications"]["recommended_actions"].extend(enhanced_actions)
+            except Exception as e:
+                print(f"Enhanced analysis error: {e}")
+        
+        # 3. Department-level analysis (if requested)
+        if include_departments:
+            try:
+                pi_cache = load_pi_department_cache()
+                dept_analysis = await analyze_delayed_funding_with_departments(institution_name, pi_cache)
+                
+                if dept_analysis and not dept_analysis.get('error'):
+                    result["department_analysis"] = {
+                        "departments": dept_analysis.get('departments', []),
+                        "highest_risk": dept_analysis.get('highest_risk_departments', [])[:5],
+                        "summary_by_risk": {
+                            risk: len([d for d in dept_analysis.get('departments', []) if d.get('risk_level') == risk])
+                            for risk in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+                        }
+                    }
+                    
+                    result["overview"] = {
+                        "total_undisbursed": round(dept_analysis.get('overall_summary', {}).get('total_undisbursed', 0), 2),
+                        "disbursement_efficiency": dept_analysis.get('overall_summary', {}).get('disbursement_efficiency', 'N/A'),
+                        "cash_flow_risk": dept_analysis.get('overall_summary', {}).get('cash_flow_risk', 'UNKNOWN'),
+                        "risk_score": dept_analysis.get('overall_summary', {}).get('delayed_funding_risk_score', 0),
+                        "departments_affected": dept_analysis.get('overall_summary', {}).get('total_departments_affected', 0),
+                        "high_risk_departments": dept_analysis.get('overall_summary', {}).get('high_risk_departments', 0)
+                    }
+                    
+                    result["institutional_impact"] = {
+                        "total_positions_potentially_affected": sum(d.get('estimated_positions_affected', 0) for d in dept_analysis.get('departments', [])),
+                        "most_underfunded_department": dept_analysis.get('departments', [{}])[0].get('department') if dept_analysis.get('departments') else None,
+                        "total_delayed_awards": sum(d.get('delayed_awards_count', 0) for d in dept_analysis.get('departments', [])),
+                        "departments_needing_immediate_attention": len([d for d in dept_analysis.get('departments', []) if d.get('risk_level') == 'CRITICAL'])
+                    }
+                    
+                    result["recommendations"] = {
+                        "priority_departments": [
+                            {
+                                "department": dept['department'],
+                                "undisbursed_amount": dept['total_undisbursed'],
+                                "action": "Immediate intervention required" if dept['risk_level'] == 'CRITICAL' else
+                                        "Monitor closely" if dept['risk_level'] == 'HIGH' else "Routine monitoring"
+                            }
+                            for dept in dept_analysis.get('departments', [])[:3]
+                        ],
+                        "next_steps": [
+                            "Focus on departments with CRITICAL risk levels",
+                            "Review grant compliance for delayed awards",
+                            "Contact program officers for expedited processing",
+                            "Consider interim funding for critical research"
+                        ] if any(d.get('risk_level') == 'CRITICAL' for d in dept_analysis.get('departments', [])) else [
+                            "Continue monitoring disbursement patterns",
+                            "Maintain good grant compliance practices"
+                        ]
+                    }
+            except Exception as e:
+                print(f"Department analysis error: {e}")
+        
+        # Add sample delayed awards if available
+        if disbursement_analysis:
+            result["sample_delayed_awards"] = disbursement_analysis.get('raw_disbursement_data', [])[:3]
+        
+        result["last_updated"] = datetime.now().isoformat()
+        
+        # Cache the result
+        try:
+            from grant_cache import save_combined_cache, get_combined_cache
+            cached_data = get_combined_cache() or []
+            cached_data.append({
+                'cache_key': cache_key,
+                'cached_at': datetime.now().isoformat(),
+                'data': result
+            })
+            save_combined_cache(cached_data)
+            print(f"Cached comprehensive analysis for {institution_name}")
+        except Exception as e:
+            print(f"Caching error: {e}")
+        
+        return result
+        
     except Exception as e:
-        print(f"Error analyzing delayed funding: {e}")
-        raise HTTPException(status_code=500, detail=f"Error analyzing delayed funding: {str(e)}")
+        print(f"Error in comprehensive delayed funding analysis: {e}")
+        return {
+            "institution": institution_name,
+            "error": f"Analysis failed: {str(e)}",
+            "note": "Comprehensive delayed funding analysis not available",
+            "analysis_date": datetime.now().isoformat()
+        }
+
+@app.get("/api/enhanced-delayed-funding/{institution_name}")
+async def get_enhanced_delayed_funding_analysis_legacy(institution_name: str, method: str = "comprehensive"):
+    """
+    Legacy endpoint - redirects to comprehensive analysis
+    Maintained for backward compatibility
+    """
+    return await get_comprehensive_delayed_funding_analysis(institution_name, include_departments=True, method=method)
 
 @app.get("/api/delayed-funding-departments/{institution_name}")
-async def get_delayed_funding_by_departments(institution_name: str):
-    """Get delayed funding analysis broken down by departments - shows which labs are affected by funding delays"""
+async def get_delayed_funding_by_departments_legacy(institution_name: str):
+    """
+    Legacy endpoint - redirects to comprehensive analysis with departments
+    Maintained for backward compatibility
+    """
+    return await get_comprehensive_delayed_funding_analysis(institution_name, include_departments=True, method="comprehensive")
+
+@app.get("/api/renewal-patterns-analysis")
+async def get_renewal_patterns_analysis(institutions: str = None):
+    """
+    Multi-institutional renewal patterns analysis (Times-style methodology)
+    
+    Query parameter:
+    - institutions: Comma-separated list of institution names
+    """
     try:
-        print(f"Analyzing delayed funding by departments for: {institution_name}")
+        from enhanced_delayed_funding_tracker import analyze_institutional_renewal_patterns
         
-        # Load PI department cache
-        pi_cache = load_pi_department_cache()
+        # Parse institutions
+        if not institutions:
+            institution_list = [
+                "Harvard University",
+                "Stanford University", 
+                "Massachusetts Institute of Technology",
+                "University of California Berkeley",
+                "Yale University"
+            ]
+        else:
+            institution_list = [inst.strip() for inst in institutions.split(',')]
         
-        # Get detailed department analysis
-        dept_analysis = await analyze_delayed_funding_with_departments(institution_name, pi_cache)
+        print(f"Analyzing renewal patterns for {len(institution_list)} institutions")
         
-        if dept_analysis.get('error'):
-            return {
-                "institution": institution_name,
-                "error": dept_analysis['error'],
-                "note": "No disbursement data available for department analysis"
-            }
+        # Get multi-institutional analysis
+        analysis = await analyze_institutional_renewal_patterns(institution_list)
         
-        # Enhanced response with department insights
+        # Format for API response
         return {
-            "institution": institution_name,
-            "analysis_date": dept_analysis['analysis_date'],
-            "overview": {
-                "total_undisbursed": round(dept_analysis['overall_summary']['total_undisbursed'], 2),
-                "disbursement_efficiency": dept_analysis['overall_summary']['disbursement_efficiency'],
-                "cash_flow_risk": dept_analysis['overall_summary']['cash_flow_risk'],
-                "risk_score": dept_analysis['overall_summary']['delayed_funding_risk_score'],
-                "departments_affected": dept_analysis['overall_summary']['total_departments_affected'],
-                "high_risk_departments": dept_analysis['overall_summary']['high_risk_departments']
+            "analysis_date": analysis['analysis_date'],
+            "methodology": "Times-style multi-institutional renewal pattern analysis",
+            "institutions_analyzed": len(institution_list),
+            "summary": {
+                "institutions_with_delays": analysis['overall_statistics']['institutions_with_delays'],
+                "percentage_with_delays": f"{analysis['summary']['percentage_with_delays']:.1f}%",
+                "total_missing_renewals": analysis['overall_statistics']['total_missing_renewals'],
+                "total_funding_at_risk": analysis['overall_statistics']['total_at_risk_funding'],
+                "average_missing_renewals_per_institution": f"{analysis['summary']['average_missing_renewals']:.1f}"
             },
-            "department_analysis": {
-                "departments": dept_analysis['departments'],
-                "highest_risk": dept_analysis['highest_risk_departments'][:5],  # Top 5 highest risk
-                "summary_by_risk": {
-                    risk: len([d for d in dept_analysis['departments'] if d['risk_level'] == risk])
-                    for risk in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+            "institutional_breakdown": {
+                inst: {
+                    "missing_renewals": result.get('missing_renewals', 0),
+                    "renewal_rate": f"{result.get('renewal_rate', 0):.1f}%",
+                    "at_risk_funding": result.get('at_risk_amount', 0),
+                    "risk_level": result.get('risk_level', 'Unknown'),
+                    "error": result.get('error')
                 }
+                for inst, result in analysis['institutional_results'].items()
             },
-            "institutional_impact": {
-                "total_positions_potentially_affected": sum(d['estimated_positions_affected'] for d in dept_analysis['departments']),
-                "most_underfunded_department": dept_analysis['departments'][0]['department'] if dept_analysis['departments'] else None,
-                "total_delayed_awards": sum(d['delayed_awards_count'] for d in dept_analysis['departments']),
-                "departments_needing_immediate_attention": len([d for d in dept_analysis['departments'] if d['risk_level'] == 'CRITICAL'])
-            },
-            "recommendations": {
-                "priority_departments": [
-                    {
-                        "department": dept['department'],
-                        "undisbursed_amount": dept['total_undisbursed'],
-                        "action": "Immediate intervention required" if dept['risk_level'] == 'CRITICAL' else
-                                "Monitor closely" if dept['risk_level'] == 'HIGH' else "Routine monitoring"
-                    }
-                    for dept in dept_analysis['departments'][:3]
-                ],
-                "next_steps": [
-                    "Focus on departments with CRITICAL risk levels",
-                    "Review grant compliance for delayed awards",
-                    "Contact program officers for expedited processing",
-                    "Consider interim funding for critical research"
-                ] if any(d['risk_level'] == 'CRITICAL' for d in dept_analysis['departments']) else [
-                    "Continue monitoring disbursement patterns",
-                    "Maintain good grant compliance practices"
+            "insights": {
+                "most_affected_institutions": sorted(
+                    [(inst, result.get('missing_renewals', 0)) 
+                     for inst, result in analysis['institutional_results'].items() 
+                     if not result.get('error')],
+                    key=lambda x: x[1], reverse=True
+                )[:5],
+                "methodology_notes": [
+                    "Based on NYT methodology for detecting delayed funding",
+                    "Focuses on grants eligible for continuation/renewal",
+                    "Accounts for typical reporting lag periods",
+                    "Uses historical renewal timing patterns"
                 ]
-            },
-            "last_updated": datetime.now().isoformat()
+            }
         }
         
     except Exception as e:
-        print(f"Error analyzing delayed funding by departments: {e}")
-        raise HTTPException(status_code=500, detail=f"Error analyzing delayed funding by departments: {str(e)}")
+        print(f"Error in renewal patterns analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Error in renewal patterns analysis: {str(e)}")
 
 async def generate_comprehensive_leaderboard(cost_per_researcher: float = 200000, limit: int = 20) -> dict:
     """
