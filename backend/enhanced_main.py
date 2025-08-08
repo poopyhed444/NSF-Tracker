@@ -964,6 +964,158 @@ async def refresh_grant_cache():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
 
+@app.get("/api/cache-refresh")
+async def refresh_cache():
+    """Refresh all grant caches using the enhanced async cache builder."""
+    try:
+        print("🔄 Starting enhanced cache refresh...")
+        
+        # Import and run the enhanced cache builder
+        import subprocess
+        import sys
+        
+        # Run the enhanced cache builder as a subprocess
+        result = subprocess.run([
+            sys.executable, "enhanced_cache_builder.py"
+        ], capture_output=True, text=True, cwd=".")
+        
+        if result.returncode == 0:
+            # Get cache status after refresh
+            from grant_cache import get_cache_status
+            cache_status = get_cache_status()
+            
+            return {
+                "success": True,
+                "message": "Enhanced cache refresh completed successfully",
+                "cache_status": cache_status,
+                "output": result.stdout[-1000:] if result.stdout else "",  # Last 1000 chars
+                "note": "Cache now contains comprehensive NIH and NSF data"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Cache refresh failed",
+                "stderr": result.stderr,
+                "stdout": result.stdout
+            }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error refreshing cache: {str(e)}"
+        }
+
+@app.get("/api/cache-status")
+async def get_cache_status_endpoint():
+    """Get detailed status of all cache files."""
+    try:
+        from grant_cache import get_cache_status
+        cache_status = get_cache_status()
+        
+        # Add enhanced statistics
+        if cache_status.get("combined", {}).get("exists"):
+            from grant_cache import get_combined_cache
+            cached_data = get_combined_cache()
+            if cached_data:
+                # Calculate statistics
+                nih_count = len([g for g in cached_data if g.get("funding_agency") == "NIH"])
+                nsf_count = len([g for g in cached_data if g.get("funding_agency") == "NSF"])
+                
+                institutions = set()
+                total_funding = 0
+                for grant in cached_data:
+                    org_info = grant.get("organization", {})
+                    if isinstance(org_info, list) and len(org_info) > 0:
+                        org_name = org_info[0].get("org_name", "")
+                    elif isinstance(org_info, dict):
+                        org_name = org_info.get("org_name", "")
+                    else:
+                        org_name = ""
+                    
+                    if org_name:
+                        institutions.add(org_name)
+                    
+                    amount = grant.get("award_amount", 0) or 0
+                    try:
+                        total_funding += float(amount)
+                    except (ValueError, TypeError):
+                        pass
+                
+                cache_status["enhanced_stats"] = {
+                    "total_grants": len(cached_data),
+                    "nih_grants": nih_count,
+                    "nsf_grants": nsf_count,
+                    "institutions": len(institutions),
+                    "total_funding": total_funding,
+                    "funding_formatted": f"${total_funding:,.0f}"
+                }
+        
+        return {
+            "success": True,
+            "cache_status": cache_status,
+            "message": "Enhanced cache contains comprehensive multi-agency data"
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error getting cache status: {str(e)}"
+        }
+
+@app.get("/api/institution-grants/{institution}")
+async def get_institution_grants_endpoint(institution: str, limit: int = 100):
+    """Get grants for a specific institution from enhanced cache."""
+    try:
+        from grant_cache import get_combined_cache
+        cached_data = get_combined_cache()
+        
+        if not cached_data:
+            return {
+                "error": "No cached grant data available",
+                "note": "Run /api/cache-refresh to populate cache"
+            }
+        
+        # Filter for the specific institution
+        institution_grants = []
+        normalized_institution = normalize_institution_name(institution)
+        
+        for grant in cached_data:
+            org_info = grant.get("organization", {})
+            if isinstance(org_info, list) and len(org_info) > 0:
+                org_name = org_info[0].get("org_name", "")
+            elif isinstance(org_info, dict):
+                org_name = org_info.get("org_name", "")
+            else:
+                continue
+                
+            if normalized_institution.lower() in normalize_institution_name(org_name).lower():
+                institution_grants.append(grant)
+        
+        # Sort by award amount and limit
+        institution_grants.sort(key=lambda g: float(g.get("award_amount", 0) or 0), reverse=True)
+        institution_grants = institution_grants[:limit]
+        
+        # Calculate summary stats
+        total_funding = sum(float(g.get("award_amount", 0) or 0) for g in institution_grants)
+        nih_grants = [g for g in institution_grants if g.get("funding_agency") == "NIH"]
+        nsf_grants = [g for g in institution_grants if g.get("funding_agency") == "NSF"]
+        
+        return {
+            "institution": institution,
+            "grants_found": len(institution_grants),
+            "total_funding": total_funding,
+            "funding_formatted": f"${total_funding:,.0f}",
+            "nih_grants": len(nih_grants),
+            "nsf_grants": len(nsf_grants),
+            "grants": institution_grants[:limit],
+            "note": f"Showing top {min(limit, len(institution_grants))} grants by amount"
+        }
+        
+    except Exception as e:
+        return {
+            "error": f"Error fetching institution grants: {str(e)}"
+        }
+
 if __name__ == "__main__":
     import uvicorn
     print("Starting Enhanced NSF-Tracker API with multi-agency integration...")
