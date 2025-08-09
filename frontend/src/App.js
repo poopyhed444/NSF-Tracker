@@ -601,6 +601,253 @@ function App() {
               </div>
             )}
 
+            {/* Cancelled Grants Impact */}
+            {institutionDetails.delayed_funding && institutionDetails.delayed_funding.cancelled_grants_impact && (
+              <div className="cancelled-grants-section" style={{ 
+                marginBottom: '30px', 
+                padding: '20px', 
+                backgroundColor: '#ffebee', 
+                borderRadius: '8px',
+                border: '2px solid #f44336'
+              }}>
+                <h3 style={{ color: '#d32f2f', display: 'flex', alignItems: 'center' }}>
+                  🚫 Cancelled Grants Impact
+                  <span style={{ 
+                    marginLeft: '10px', 
+                    padding: '4px 8px', 
+                    borderRadius: '4px', 
+                    fontSize: '12px', 
+                    backgroundColor: '#f44336',
+                    color: 'white'
+                  }}>
+                    FUNDING LOST
+                  </span>
+                </h3>
+                
+                <div className="cancelled-grants-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                  <div className="cancelled-metric">
+                    <div style={{ fontSize: '12px', color: '#666' }}>Total Lost Funding</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#d32f2f' }}>
+                      {formatCurrency(institutionDetails.delayed_funding.cancelled_grants_impact.total_lost_funding)}
+                    </div>
+                  </div>
+                  <div className="cancelled-metric">
+                    <div style={{ fontSize: '12px', color: '#666' }}>PIs Impacted</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#d32f2f' }}>
+                      {institutionDetails.delayed_funding.cancelled_grants_impact.pis_impacted}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top PIs */}
+                {institutionDetails.delayed_funding.cancelled_grants_impact.top_pis && 
+                 institutionDetails.delayed_funding.cancelled_grants_impact.top_pis.length > 0 && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ color: '#d32f2f', marginBottom: '10px' }}>Most Impacted PIs</h4>
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      {institutionDetails.delayed_funding.cancelled_grants_impact.top_pis.slice(0, 5).map((pi, index) => (
+                        <div key={index} style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          padding: '8px 12px', 
+                          backgroundColor: 'white', 
+                          borderRadius: '4px',
+                          border: '1px solid #ffcdd2'
+                        }}>
+                          <div>
+                            <strong>{pi.pi_name}</strong>
+                            <div style={{ fontSize: '12px', color: '#666' }}>{pi.department}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                              {formatCurrency(pi.lost_funding)}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#666' }}>
+                              {pi.grants_count} grants
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Department Losses */}
+                {institutionDetails.delayed_funding.cancelled_grants_impact.department_losses && 
+                 Object.keys(institutionDetails.delayed_funding.cancelled_grants_impact.department_losses).length > 0 && (
+                  <div>
+                    <h4 style={{ color: '#d32f2f', marginBottom: '10px' }}>Losses by Department</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '10px' }}>
+                      {Object.entries(institutionDetails.delayed_funding.cancelled_grants_impact.department_losses)
+                        .slice(0, 6).map(([dept, amount]) => (
+                        <div key={dept} style={{ 
+                          padding: '8px 12px', 
+                          backgroundColor: 'white', 
+                          borderRadius: '4px',
+                          border: '1px solid #ffcdd2',
+                          display: 'flex',
+                          justifyContent: 'space-between'
+                        }}>
+                          <span style={{ fontSize: '14px' }}>{dept}</span>
+                          <span style={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                            {formatCurrency(amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ 
+                  marginTop: '15px', 
+                  padding: '8px 12px', 
+                  backgroundColor: '#ffcdd2', 
+                  borderRadius: '4px', 
+                  fontSize: '12px',
+                  color: '#666',
+                  fontStyle: 'italic'
+                }}>
+                  {institutionDetails.delayed_funding.cancelled_grants_impact.methodology_note}
+                </div>
+              </div>
+            )}
+
+            {/* Non-Renewal Grants Impact */}
+            {institutionDetails.delayed_funding && institutionDetails.delayed_funding.nonrenewal_grants_impact && (
+              <div className="nonrenewal-grants-section" style={{ 
+                marginBottom: '30px', 
+                padding: '20px', 
+                backgroundColor: '#fff3e0', 
+                borderRadius: '8px',
+                border: '2px solid #ff9800'
+              }}>
+                <h3 style={{ color: '#e65100', display: 'flex', alignItems: 'center' }}>
+                  📉 Non-Renewal Grants Impact
+                  <span style={{ 
+                    marginLeft: '10px', 
+                    padding: '4px 8px', 
+                    borderRadius: '4px', 
+                    fontSize: '12px', 
+                    backgroundColor: '#ff9800',
+                    color: 'white'
+                  }}>
+                    NOT RENEWED
+                  </span>
+                </h3>
+                
+                <div className="nonrenewal-grants-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                  <div className="nonrenewal-metric">
+                    <div style={{ fontSize: '12px', color: '#666' }}>Lost from Non-Renewals</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#e65100' }}>
+                      {formatCurrency(institutionDetails.delayed_funding.nonrenewal_grants_impact.total_lost_funding)}
+                    </div>
+                  </div>
+                  <div className="nonrenewal-metric">
+                    <div style={{ fontSize: '12px', color: '#666' }}>PIs Affected</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#e65100' }}>
+                      {institutionDetails.delayed_funding.nonrenewal_grants_impact.pis_impacted}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Show zero state or data */}
+                {institutionDetails.delayed_funding.nonrenewal_grants_impact.pis_impacted === 0 ? (
+                  <div style={{ 
+                    padding: '15px', 
+                    backgroundColor: '#e8f5e8', 
+                    borderRadius: '4px',
+                    border: '1px solid #4caf50',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ color: '#2e7d32', fontWeight: 'bold' }}>
+                      ✅ No Non-Renewal Issues Detected
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>
+                      All eligible grants that expired in the analysis period have renewal evidence.
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Top PIs for non-renewals */}
+                    {institutionDetails.delayed_funding.nonrenewal_grants_impact.top_pis && 
+                     institutionDetails.delayed_funding.nonrenewal_grants_impact.top_pis.length > 0 && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ color: '#e65100', marginBottom: '10px' }}>Most Affected PIs</h4>
+                        <div style={{ display: 'grid', gap: '8px' }}>
+                          {institutionDetails.delayed_funding.nonrenewal_grants_impact.top_pis.slice(0, 5).map((pi, index) => (
+                            <div key={index} style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              padding: '8px 12px', 
+                              backgroundColor: 'white', 
+                              borderRadius: '4px',
+                              border: '1px solid #ffcc02'
+                            }}>
+                              <div>
+                                <strong>{pi.pi_name}</strong>
+                                <div style={{ fontSize: '12px', color: '#666' }}>{pi.department}</div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontWeight: 'bold', color: '#e65100' }}>
+                                  {formatCurrency(pi.lost_funding)}
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#666' }}>
+                                  {pi.grants_count} grants
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Department Losses */}
+                    {institutionDetails.delayed_funding.nonrenewal_grants_impact.department_losses && 
+                     Object.keys(institutionDetails.delayed_funding.nonrenewal_grants_impact.department_losses).length > 0 && (
+                      <div>
+                        <h4 style={{ color: '#e65100', marginBottom: '10px' }}>Non-Renewal Losses by Department</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '10px' }}>
+                          {Object.entries(institutionDetails.delayed_funding.nonrenewal_grants_impact.department_losses)
+                            .slice(0, 6).map(([dept, amount]) => (
+                            <div key={dept} style={{ 
+                              padding: '8px 12px', 
+                              backgroundColor: 'white', 
+                              borderRadius: '4px',
+                              border: '1px solid #ffcc02',
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontSize: '14px' }}>{dept}</span>
+                              <span style={{ fontWeight: 'bold', color: '#e65100' }}>
+                                {formatCurrency(amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div style={{ 
+                  marginTop: '15px', 
+                  padding: '8px 12px', 
+                  backgroundColor: '#ffe0b2', 
+                  borderRadius: '4px', 
+                  fontSize: '12px',
+                  color: '#666',
+                  fontStyle: 'italic'
+                }}>
+                  {institutionDetails.delayed_funding.nonrenewal_grants_impact.methodology_note}
+                  {institutionDetails.delayed_funding.nonrenewal_grants_impact.analysis_period && (
+                    <div style={{ marginTop: '4px' }}>
+                      Analysis Period: {institutionDetails.delayed_funding.nonrenewal_grants_impact.analysis_period}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Departments with Cancelled Grants */}
             <div className="departments-section">
               <h3>Departments with Cancelled Grants</h3>

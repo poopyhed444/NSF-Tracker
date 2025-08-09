@@ -295,8 +295,8 @@ class DelayedFundingTracker:
     async def _lookup_nsf_pi(self, award_id: str) -> str:
         """Look up PI from NSF API"""
         try:
-            # NSF Award API endpoint
-            url = f"https://www.research.gov/research-portal/api/v1/awards"
+            # Use the working NSF Award API endpoint
+            url = "https://www.research.gov/awardapi-service/v1/awards.json"
             params = {
                 "id": award_id,
                 "printFields": "id,title,piFirstName,piLastName"
@@ -305,6 +305,7 @@ class DelayedFundingTracker:
             async with self.session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
+                    # Check the correct response structure for the working API
                     if 'response' in data and 'award' in data['response']:
                         award_data = data['response']['award']
                         if isinstance(award_data, list) and award_data:

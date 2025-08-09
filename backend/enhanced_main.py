@@ -237,47 +237,232 @@ async def get_university_details(institution_name: str):
         raise HTTPException(status_code=500, detail=f"Error getting university details: {str(e)}")
 
 @app.get("/api/delayed-funding/{institution_name}")
-async def get_comprehensive_delayed_funding_analysis(institution_name: str, include_departments: bool = True, method: str = "comprehensive"):
+async def get_comprehensive_delayed_funding_analysis(
+    institution_name: str,
+    include_departments: bool = True,
+    method: str = "comprehensive",
+    force_refresh: bool = False
+):
     """
     Comprehensive delayed funding analysis combining:
     - Enhanced Times-style renewal analysis
     - Disbursement tracking
     - Department-level breakdown
     - Risk assessment and recommendations
+    - Cancelled/terminated grant funding loss by PI (new)
     
     Parameters:
     - include_departments: Include department-level analysis
     - method: 'disbursement', 'renewal', or 'comprehensive' (default)
     """
+    # Import datetime at function start to avoid scoping issues
+    from datetime import datetime as dt, timedelta
+    
     try:
         print(f"🔍 DEBUG: Comprehensive delayed funding analysis for: {institution_name} (method: {method}, departments: {include_departments})")
         print(f"🔍 DEBUG: Method is: '{method}', checking if in ['comprehensive', 'renewal']")
         
-        # Check cache first
+        # Check cache first (skip if force_refresh)
         cache_key = f"comprehensive_delayed_funding_{institution_name}_{method}_{include_departments}"
         cached_result = None
-        try:
-            from grant_cache import get_combined_cache
-            cached_data = get_combined_cache()
-            if cached_data:
-                for item in cached_data:
-                    if item.get('cache_key') == cache_key:
-                        # Check if cache is still valid (1 hour)
-                        cache_time = datetime.fromisoformat(item.get('cached_at', '2000-01-01'))
-                        if (datetime.now() - cache_time).total_seconds() < 3600:  # 1 hour cache
-                            print(f"Using cached result for {institution_name}")
-                            cached_result = item.get('data')
-                            break
-        except Exception as e:
-            print(f"Cache check error: {e}")
-        
+        if not force_refresh:
+            try:
+                from grant_cache import get_combined_cache
+                cached_data = get_combined_cache()
+                if cached_data:
+                    for item in cached_data:
+                        if item.get('cache_key') == cache_key:
+                            # Check if cache is still valid (1 hour)
+                            cache_time = dt.fromisoformat(item.get('cached_at', '2000-01-01'))
+                            if (dt.now() - cache_time).total_seconds() < 3600:  # 1 hour cache
+                                print(f"Using cached result for {institution_name}")
+                                cached_result = item.get('data')
+                                break
+            except Exception as e:
+                print(f"Cache check error: {e}")
+
+        # If we have a cached result but it's missing the new enrichments, enrich on the fly
+        if cached_result and ('cancelled_grants_impact' not in cached_result or 'nonrenewal_grants_impact' not in cached_result):
+            try:
+                from layoff_estimator import fetch_terminated_grants, normalize_institution_name, fetch_institution_grants
+                from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+                normalized_target = normalize_institution_name(institution_name)
+                
+                # 1. CANCELLED/TERMINATED GRANTS (if missing)
+                if 'cancelled_grants_impact' not in cached_result:
+                    terminated_grants = await fetch_terminated_grants()
+                    nsf_all = await fetch_institution_grants(active_only=False, max_records_per_source=1000)
+                    nsf_terminated = [g for g in nsf_all if g.get('award_status', '').lower() in ['terminated','cancelled','expired']]
+                    combined_terminated = terminated_grants + nsf_terminated
+                    pi_cache = load_pi_department_cache()
+                    lost_funding_by_pi = {}
+                    total_lost = 0.0
+                    dept_losses = {}
+                    for grant in combined_terminated:
+                        org_info = grant.get('organization', {})
+                        if isinstance(org_info, list) and org_info:
+                            org_name = org_info[0].get('org_name','')
+                        elif isinstance(org_info, dict):
+                            org_name = org_info.get('org_name','')
+                        else:
+                            continue
+                        if normalize_institution_name(org_name) != normalized_target:
+                            continue
+                        amount = float(grant.get('award_amount',0) or 0)
+                        pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip() or 'Unknown PI'
+                        dept = match_pi_to_department(pi_name, institution_name, pi_cache)
+                        entry = lost_funding_by_pi.setdefault(pi_name, {"pi_name": pi_name, "department": dept, "grants": [], "lost_funding": 0.0})
+                        entry['grants'].append({
+                            'award_id': grant.get('core_project_num') or grant.get('award_id'),
+                            'project_title': grant.get('project_title',''),
+                            'amount': amount,
+                            'start_date': grant.get('project_start_date') or grant.get('start_date'),
+                            'end_date': grant.get('project_end_date') or grant.get('end_date'),
+                            'funding_agency': grant.get('funding_agency','Unknown')
+                        })
+                        entry['lost_funding'] += amount
+                        total_lost += amount
+                        dept_losses[dept] = dept_losses.get(dept,0.0) + amount
+                    pi_lost_list = sorted(lost_funding_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)
+                    cached_result['cancelled_grants_impact'] = {
+                        'total_lost_funding': round(total_lost,2),
+                        'pis_impacted': len(pi_lost_list),
+                        'top_pis': [
+                            {
+                                'pi_name': pi['pi_name'],
+                                'department': pi['department'],
+                                'lost_funding': round(pi['lost_funding'],2),
+                                'grants_count': len(pi['grants'])
+                            } for pi in pi_lost_list[:10]
+                        ],
+                        'department_losses': {k: round(v,2) for k,v in sorted(dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
+                        'methodology_note': 'Termination-based lost funding derived from NIH (past 12 months) + NSF terminated/cancelled/expired awards'
+                    }
+                else:
+                    # Use existing data for combined calculation
+                    total_lost = cached_result['cancelled_grants_impact'].get('total_lost_funding', 0)
+                    combined_terminated = []  # Already processed, avoid double counting
+                
+                # 2. NON-RENEWAL ANALYSIS (if missing)
+                if 'nonrenewal_grants_impact' not in cached_result:
+                    # Get all grants for non-renewal analysis
+                    all_grants = await fetch_institution_grants(active_only=False, max_records_per_source=2000)
+                    all_grants_filtered = []
+                    for grant in all_grants:
+                        org_info = grant.get('organization', {})
+                        if isinstance(org_info, list) and org_info:
+                            org_name = org_info[0].get('org_name','')
+                        elif isinstance(org_info, dict):
+                            org_name = org_info.get('org_name','')
+                        else:
+                            continue
+                        if normalize_institution_name(org_name) == normalized_target:
+                            all_grants_filtered.append(grant)
+                    
+                    tracker = EnhancedDelayedFundingTracker()
+                    nonrenewal_lost_by_pi = {}
+                    nonrenewal_total_lost = 0.0
+                    nonrenewal_dept_losses = {}
+                    
+                    cutoff_date = dt.now() - timedelta(days=180)
+                    
+                    for grant in all_grants_filtered:
+                        # Skip if this grant is in the cancelled list (avoid double counting)
+                        grant_id = grant.get('core_project_num') or grant.get('award_id')
+                        if any(g.get('core_project_num') == grant_id or g.get('award_id') == grant_id for g in combined_terminated):
+                            continue
+                        
+                        if not tracker._is_renewal_eligible_grant(grant):
+                            continue
+                        
+                        try:
+                            end_date_str = grant.get('project_end_date', '')[:10]
+                            if not end_date_str:
+                                continue
+                            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+                            
+                            if end_date < cutoff_date or end_date > dt.now():
+                                continue
+                            
+                            renewal_found = await tracker._check_for_renewal_evidence(grant, all_grants_filtered)
+                            if renewal_found:
+                                continue
+                            
+                            amount = float(grant.get('award_amount',0) or 0)
+                            pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip() or 'Unknown PI'
+                            pi_cache = load_pi_department_cache()
+                            dept = match_pi_to_department(pi_name, institution_name, pi_cache)
+                            
+                            entry = nonrenewal_lost_by_pi.setdefault(pi_name, {"pi_name": pi_name, "department": dept, "grants": [], "lost_funding": 0.0})
+                            entry['grants'].append({
+                                'award_id': grant_id,
+                                'project_title': grant.get('project_title',''),
+                                'amount': amount,
+                                'start_date': grant.get('project_start_date') or grant.get('start_date'),
+                                'end_date': grant.get('project_end_date') or grant.get('end_date'),
+                                'funding_agency': grant.get('funding_agency','Unknown'),
+                                'days_since_expiry': (dt.now() - end_date).days
+                            })
+                            entry['lost_funding'] += amount
+                            nonrenewal_total_lost += amount
+                            nonrenewal_dept_losses[dept] = nonrenewal_dept_losses.get(dept,0.0) + amount
+                            
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    nonrenewal_pi_lost_list = sorted(nonrenewal_lost_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)
+                    cached_result['nonrenewal_grants_impact'] = {
+                        'total_lost_funding': round(nonrenewal_total_lost,2),
+                        'pis_impacted': len(nonrenewal_pi_lost_list),
+                        'top_pis': [
+                            {
+                                'pi_name': pi['pi_name'],
+                                'department': pi['department'],
+                                'lost_funding': round(pi['lost_funding'],2),
+                                'grants_count': len(pi['grants'])
+                            } for pi in nonrenewal_pi_lost_list[:10]
+                        ],
+                        'department_losses': {k: round(v,2) for k,v in sorted(nonrenewal_dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
+                        'methodology_note': 'Non-renewal analysis: grants that expired in past 6 months without renewal evidence (Times-style analysis)',
+                        'analysis_period': f'Past 6 months from {cutoff_date.strftime("%Y-%m-%d")} to {dt.now().strftime("%Y-%m-%d")}'
+                    }
+                else:
+                    nonrenewal_total_lost = cached_result['nonrenewal_grants_impact'].get('total_lost_funding', 0)
+                
+                # 3. UPDATE RISK SCORING
+                combined_total_lost = total_lost + nonrenewal_total_lost
+                if combined_total_lost > 0:
+                    additional_risk = min(25, combined_total_lost / 5_000_000 * 12)
+                    if 'cash_flow_risk' in cached_result:
+                        cached_result['cash_flow_risk']['score'] = min(100, cached_result['cash_flow_risk'].get('score',0) + additional_risk)
+                        risk_factors = cached_result['cash_flow_risk'].get('risk_factors', [])
+                        if total_lost > 0 and 'Recent cancellations increasing funding cliff risk' not in risk_factors:
+                            risk_factors.append('Recent cancellations increasing funding cliff risk')
+                        if nonrenewal_total_lost > 0 and 'Non-renewal patterns indicating funding stability concerns' not in risk_factors:
+                            risk_factors.append('Non-renewal patterns indicating funding stability concerns')
+                        cached_result['cash_flow_risk']['risk_factors'] = risk_factors
+                
+                # Update cache with enriched version
+                try:
+                    from grant_cache import save_combined_cache, get_combined_cache
+                    cd = get_combined_cache() or []
+                    cd = [item for item in cd if item.get('cache_key') != cache_key]
+                    cd.append({'cache_key': cache_key, 'cached_at': dt.now().isoformat(), 'data': cached_result})
+                    save_combined_cache(cd)
+                except Exception as e:
+                    print(f"Cache update after enrichment failed: {e}")
+                return cached_result
+            except Exception as e:
+                print(f"On-the-fly enrichment of cached result failed: {e}")
+                return cached_result
+
         if cached_result:
             return cached_result
         
         # Initialize result structure
         result = {
             "institution": institution_name,
-            "analysis_date": datetime.now().isoformat(),
+            "analysis_date": dt.now().isoformat(),
             "methodology": "Comprehensive delayed funding analysis",
             "cash_flow_risk": {"level": "UNKNOWN", "score": 0, "risk_factors": [], "severity": "UNKNOWN"},
             "financial_overview": {
@@ -465,30 +650,211 @@ async def get_comprehensive_delayed_funding_analysis(institution_name: str, incl
             result["sample_delayed_awards"] = disbursement_analysis.get('raw_disbursement_data', [])[:3]
         
         result["last_updated"] = datetime.now().isoformat()
-        
-        # Cache the result
+
+        # Enrich with cancelled / terminated grant funding loss AND non-renewal funding loss BEFORE caching
+        try:
+            from layoff_estimator import fetch_terminated_grants, normalize_institution_name, fetch_institution_grants
+            from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+            normalized_target = normalize_institution_name(institution_name)
+            
+            # 1. CANCELLED/TERMINATED GRANTS ANALYSIS
+            terminated_grants = await fetch_terminated_grants()
+            nsf_all = await fetch_institution_grants(active_only=False, max_records_per_source=1000)
+            nsf_terminated = [g for g in nsf_all if g.get('award_status', '').lower() in ['terminated','cancelled','expired']]
+            combined_terminated = terminated_grants + nsf_terminated
+            
+            pi_cache = load_pi_department_cache()
+            cancelled_lost_by_pi = {}
+            cancelled_total_lost = 0.0
+            cancelled_dept_losses = {}
+            
+            for grant in combined_terminated:
+                org_info = grant.get('organization', {})
+                if isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get('org_name','')
+                elif isinstance(org_info, dict):
+                    org_name = org_info.get('org_name','')
+                else:
+                    continue
+                if normalize_institution_name(org_name) != normalized_target:
+                    continue
+                amount = float(grant.get('award_amount',0) or 0)
+                pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip() or 'Unknown PI'
+                dept = match_pi_to_department(pi_name, institution_name, pi_cache)
+                entry = cancelled_lost_by_pi.setdefault(pi_name, {"pi_name": pi_name, "department": dept, "grants": [], "lost_funding": 0.0})
+                entry['grants'].append({
+                    'award_id': grant.get('core_project_num') or grant.get('award_id'),
+                    'project_title': grant.get('project_title',''),
+                    'amount': amount,
+                    'start_date': grant.get('project_start_date') or grant.get('start_date'),
+                    'end_date': grant.get('project_end_date') or grant.get('end_date'),
+                    'funding_agency': grant.get('funding_agency','Unknown')
+                })
+                entry['lost_funding'] += amount
+                cancelled_total_lost += amount
+                cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept,0.0) + amount
+            
+            cancelled_pi_lost_list = sorted(cancelled_lost_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)
+            result['cancelled_grants_impact'] = {
+                'total_lost_funding': round(cancelled_total_lost,2),
+                'pis_impacted': len(cancelled_pi_lost_list),
+                'top_pis': [
+                    {
+                        'pi_name': pi['pi_name'],
+                        'department': pi['department'],
+                        'lost_funding': round(pi['lost_funding'],2),
+                        'grants_count': len(pi['grants'])
+                    } for pi in cancelled_pi_lost_list[:10]
+                ],
+                'department_losses': {k: round(v,2) for k,v in sorted(cancelled_dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
+                'methodology_note': 'Termination-based lost funding derived from NIH (past 12 months) + NSF terminated/cancelled/expired awards'
+            }
+            
+            # 2. NON-RENEWAL ANALYSIS (grants that expired without renewal)
+            # Get all grants for the institution including expired ones
+            all_grants = await fetch_institution_grants(active_only=False, max_records_per_source=2000)
+            all_grants_filtered = []
+            for grant in all_grants:
+                org_info = grant.get('organization', {})
+                if isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get('org_name','')
+                elif isinstance(org_info, dict):
+                    org_name = org_info.get('org_name','')
+                else:
+                    continue
+                if normalize_institution_name(org_name) == normalized_target:
+                    all_grants_filtered.append(grant)
+            
+            # Use enhanced tracker to find non-renewals
+            tracker = EnhancedDelayedFundingTracker()
+            nonrenewal_lost_by_pi = {}
+            nonrenewal_total_lost = 0.0
+            nonrenewal_dept_losses = {}
+            
+            cutoff_date = dt.now() - timedelta(days=180)  # Look at grants that ended in last 6 months
+            
+            for grant in all_grants_filtered:
+                # Skip if this grant is in the cancelled list (avoid double counting)
+                grant_id = grant.get('core_project_num') or grant.get('award_id')
+                if any(g.get('core_project_num') == grant_id or g.get('award_id') == grant_id for g in combined_terminated):
+                    continue
+                
+                # Check if grant is eligible for renewal and has ended without renewal
+                if not tracker._is_renewal_eligible_grant(grant):
+                    continue
+                
+                try:
+                    end_date_str = grant.get('project_end_date', '')[:10]
+                    if not end_date_str:
+                        continue
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+                    
+                    # Only consider grants that ended recently (within cutoff) and no renewal found
+                    if end_date < cutoff_date or end_date > dt.now():
+                        continue
+                    
+                    # Check if renewal exists
+                    renewal_found = await tracker._check_for_renewal_evidence(grant, all_grants_filtered)
+                    if renewal_found:
+                        continue  # Grant was renewed, not lost
+                    
+                    # This is a non-renewed grant - track the lost funding
+                    amount = float(grant.get('award_amount',0) or 0)
+                    pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip() or 'Unknown PI'
+                    dept = match_pi_to_department(pi_name, institution_name, pi_cache)
+                    
+                    entry = nonrenewal_lost_by_pi.setdefault(pi_name, {"pi_name": pi_name, "department": dept, "grants": [], "lost_funding": 0.0})
+                    entry['grants'].append({
+                        'award_id': grant_id,
+                        'project_title': grant.get('project_title',''),
+                        'amount': amount,
+                        'start_date': grant.get('project_start_date') or grant.get('start_date'),
+                        'end_date': grant.get('project_end_date') or grant.get('end_date'),
+                        'funding_agency': grant.get('funding_agency','Unknown'),
+                        'days_since_expiry': (datetime.now() - end_date).days
+                    })
+                    entry['lost_funding'] += amount
+                    nonrenewal_total_lost += amount
+                    nonrenewal_dept_losses[dept] = nonrenewal_dept_losses.get(dept,0.0) + amount
+                    
+                except (ValueError, TypeError):
+                    continue
+            
+            nonrenewal_pi_lost_list = sorted(nonrenewal_lost_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)
+            result['nonrenewal_grants_impact'] = {
+                'total_lost_funding': round(nonrenewal_total_lost,2),
+                'pis_impacted': len(nonrenewal_pi_lost_list),
+                'top_pis': [
+                    {
+                        'pi_name': pi['pi_name'],
+                        'department': pi['department'],
+                        'lost_funding': round(pi['lost_funding'],2),
+                        'grants_count': len(pi['grants'])
+                    } for pi in nonrenewal_pi_lost_list[:10]
+                ],
+                'department_losses': {k: round(v,2) for k,v in sorted(nonrenewal_dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
+                'methodology_note': 'Non-renewal analysis: grants that expired in past 6 months without renewal evidence (Times-style analysis)',
+                'analysis_period': f'Past 6 months from {cutoff_date.strftime("%Y-%m-%d")} to {dt.now().strftime("%Y-%m-%d")}'
+            }
+            
+            # 3. COMBINED RISK SCORING - cancelled + non-renewal impacts
+            combined_total_lost = cancelled_total_lost + nonrenewal_total_lost
+            if combined_total_lost > 0 and 'cash_flow_risk' in result:
+                additional_risk = min(25, combined_total_lost / 5_000_000 * 12)  # Slightly higher weight for combined impact
+                result['cash_flow_risk']['score'] = min(100, result['cash_flow_risk'].get('score',0) + additional_risk)
+                risk_factors = result['cash_flow_risk'].get('risk_factors', [])
+                if cancelled_total_lost > 0 and 'Recent cancellations increasing funding cliff risk' not in risk_factors:
+                    risk_factors.append('Recent cancellations increasing funding cliff risk')
+                if nonrenewal_total_lost > 0 and 'Non-renewal patterns indicating funding stability concerns' not in risk_factors:
+                    risk_factors.append('Non-renewal patterns indicating funding stability concerns')
+                result['cash_flow_risk']['risk_factors'] = risk_factors
+            
+        except Exception as e:
+            print(f"Cancelled/non-renewal grants enrichment error: {e}")
+            # Guarantee fields exist even on failure
+            if 'cancelled_grants_impact' not in result:
+                result['cancelled_grants_impact'] = {
+                    'total_lost_funding': 0.0,
+                    'pis_impacted': 0,
+                    'top_pis': [],
+                    'department_losses': {},
+                    'methodology_note': 'Enrichment failed; no termination data available this run'
+                }
+            if 'nonrenewal_grants_impact' not in result:
+                result['nonrenewal_grants_impact'] = {
+                    'total_lost_funding': 0.0,
+                    'pis_impacted': 0,
+                    'top_pis': [],
+                    'department_losses': {},
+                    'methodology_note': 'Enrichment failed; no non-renewal data available this run',
+                    'analysis_period': 'N/A'
+                }
+
+        # Cache AFTER enrichment
         try:
             from grant_cache import save_combined_cache, get_combined_cache
             cached_data = get_combined_cache() or []
+            # Remove any previous entries for this key so newest (enriched) wins
+            cached_data = [item for item in cached_data if item.get('cache_key') != cache_key]
             cached_data.append({
                 'cache_key': cache_key,
                 'cached_at': datetime.now().isoformat(),
                 'data': result
             })
             save_combined_cache(cached_data)
-            print(f"Cached comprehensive analysis for {institution_name}")
+            print(f"Cached comprehensive analysis for {institution_name} (enriched)")
         except Exception as e:
             print(f"Caching error: {e}")
         
         return result
-        
     except Exception as e:
         print(f"Error in comprehensive delayed funding analysis: {e}")
+        from datetime import datetime as dt
         return {
-            "institution": institution_name,
-            "error": f"Analysis failed: {str(e)}",
-            "note": "Comprehensive delayed funding analysis not available",
-            "analysis_date": datetime.now().isoformat()
+            'institution': institution_name,
+            'error': f'Analysis failed: {str(e)}',
+            'note': 'Comprehensive delayed funding analysis not available',
+            'analysis_date': dt.now().isoformat()
         }
 
 @app.get("/api/enhanced-delayed-funding/{institution_name}")
