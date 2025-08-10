@@ -17,6 +17,97 @@ from usaspending_cache_loader import get_usaspending_funding, get_usaspending_st
 from delayed_funding_tracker import analyze_delayed_funding_for_institution, analyze_delayed_funding_with_departments
 import pandas as pd
 
+async def fetch_with_cache_fallback(fetch_function, cache_key: str, *args, **kwargs):
+    """
+    Enhanced fetch function that uses cache as fallback when API is unavailable
+    
+    Args:
+        fetch_function: The async function to call for fresh data
+        cache_key: Unique identifier for this data in cache
+        *args, **kwargs: Arguments to pass to fetch_function
+    
+    Returns:
+        Data from API (fresh) or cache (fallback)
+    """
+    from grant_cache import get_combined_cache, save_combined_cache
+    from datetime import datetime as dt, timedelta
+    
+    try:
+        # Try to get fresh data from API first
+        print(f"🌐 Attempting fresh API fetch for {cache_key}...")
+        fresh_data = await fetch_function(*args, **kwargs)
+        
+        if fresh_data and len(fresh_data) > 0:
+            # Save fresh data to cache with timestamp
+            try:
+                cached_data = get_combined_cache() or []
+                # Remove old entry for this key
+                cached_data = [item for item in cached_data if item.get('cache_key') != cache_key]
+                # Add new entry
+                cached_data.append({
+                    'cache_key': cache_key,
+                    'cached_at': dt.now().isoformat(),
+                    'data': fresh_data,
+                    'source': 'api_fresh'
+                })
+                save_combined_cache(cached_data)
+                print(f"✅ Fresh API data cached for {cache_key} ({len(fresh_data)} items)")
+            except Exception as cache_error:
+                print(f"⚠️ Could not save to cache: {cache_error}")
+            
+            return fresh_data
+            
+    except Exception as api_error:
+        print(f"❌ API fetch failed for {cache_key}: {api_error}")
+        
+    # API failed, try to use cached data as fallback
+    try:
+        print(f"🔄 API unavailable, attempting cache fallback for {cache_key}...")
+        cached_data = get_combined_cache() or []
+        
+        for item in cached_data:
+            if item.get('cache_key') == cache_key:
+                cached_at = dt.fromisoformat(item.get('cached_at', '2000-01-01'))
+                age_hours = (dt.now() - cached_at).total_seconds() / 3600
+                
+                print(f"📦 Found cached data for {cache_key} (age: {age_hours:.1f} hours)")
+                
+                # Use cached data even if old (better than no data)
+                cache_data = item.get('data', [])
+                if cache_data:
+                    # Mark as cached fallback
+                    if isinstance(cache_data, list):
+                        for entry in cache_data:
+                            if isinstance(entry, dict):
+                                entry['_cache_fallback'] = True
+                                entry['_cache_age_hours'] = round(age_hours, 1)
+                    
+                    print(f"✅ Using cached fallback data ({len(cache_data)} items, {age_hours:.1f}h old)")
+                    return cache_data
+                    
+    except Exception as cache_error:
+        print(f"❌ Cache fallback also failed for {cache_key}: {cache_error}")
+    
+    # Both API and cache failed
+    print(f"💥 No data available for {cache_key} (API failed, no cache)")
+    return []
+
+async def get_institution_funding_with_fallback(institution_name: str):
+    """Get institution funding data with cache fallback"""
+    cache_key = f"institution_funding_{normalize_institution_name(institution_name)}"
+    
+    # Define the fetch function
+    async def fetch_data():
+        return await fetch_institution_grants(institution_name, active_only=True, max_records_per_source=1000)
+    
+    return await fetch_with_cache_fallback(fetch_data, cache_key)
+
+async def get_terminated_grants_with_fallback():
+    """Get terminated grants with cache fallback"""
+    cache_key = "terminated_grants_all"
+    
+    return await fetch_with_cache_fallback(fetch_terminated_grants, cache_key)
+
 app = FastAPI(title="NSF-Tracker Enhanced API", version="2.0.0")
 
 # Configure CORS
@@ -288,12 +379,19 @@ async def get_comprehensive_delayed_funding_analysis(
                 from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
                 normalized_target = normalize_institution_name(institution_name)
                 
-                # 1. CANCELLED/TERMINATED GRANTS (if missing)
+                # 1. CANCELLED/TERMINATED GRANTS (if missing) - WITH CACHE FALLBACK
                 if 'cancelled_grants_impact' not in cached_result:
-                    terminated_grants = await fetch_terminated_grants()
-                    nsf_all = await fetch_institution_grants(active_only=False, max_records_per_source=1000)
+                    print("🔄 Adding cancelled grants analysis with cache fallback...")
+                    terminated_grants = await get_terminated_grants_with_fallback()
+                    nsf_all = await get_institution_funding_with_fallback(institution_name)
                     nsf_terminated = [g for g in nsf_all if g.get('award_status', '').lower() in ['terminated','cancelled','expired']]
                     combined_terminated = terminated_grants + nsf_terminated
+                    
+                    # Check if using fallback data
+                    using_cached_data = any(g.get('_cache_fallback') for g in combined_terminated)
+                    if using_cached_data:
+                        print("⚠️ Using cached data for cancelled grants analysis (API unavailable)")
+                    
                     pi_cache = load_pi_department_cache()
                     lost_funding_by_pi = {}
                     total_lost = 0.0
@@ -336,17 +434,25 @@ async def get_comprehensive_delayed_funding_analysis(
                             } for pi in pi_lost_list[:10]
                         ],
                         'department_losses': {k: round(v,2) for k,v in sorted(dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
-                        'methodology_note': 'Termination-based lost funding derived from NIH (past 12 months) + NSF terminated/cancelled/expired awards'
+                        'methodology_note': f'Termination-based lost funding derived from NIH + NSF APIs {"(cached data)" if using_cached_data else "(fresh data)"}',
+                        '_data_source': 'cache_fallback' if using_cached_data else 'fresh_api'
                     }
                 else:
                     # Use existing data for combined calculation
                     total_lost = cached_result['cancelled_grants_impact'].get('total_lost_funding', 0)
                     combined_terminated = []  # Already processed, avoid double counting
                 
-                # 2. NON-RENEWAL ANALYSIS (if missing)
+                # 2. NON-RENEWAL ANALYSIS (if missing) - WITH CACHE FALLBACK
                 if 'nonrenewal_grants_impact' not in cached_result:
-                    # Get all grants for non-renewal analysis
-                    all_grants = await fetch_institution_grants(active_only=False, max_records_per_source=2000)
+                    print("🔄 Adding non-renewal analysis with cache fallback...")
+                    # Get all grants for non-renewal analysis with fallback
+                    all_grants = await get_institution_funding_with_fallback(institution_name)
+                    
+                    # Check if using fallback data
+                    using_cached_nonrenewal = any(g.get('_cache_fallback') for g in all_grants)
+                    if using_cached_nonrenewal:
+                        print("⚠️ Using cached data for non-renewal analysis (API unavailable)")
+                    
                     all_grants_filtered = []
                     for grant in all_grants:
                         org_info = grant.get('organization', {})
@@ -423,8 +529,9 @@ async def get_comprehensive_delayed_funding_analysis(
                             } for pi in nonrenewal_pi_lost_list[:10]
                         ],
                         'department_losses': {k: round(v,2) for k,v in sorted(nonrenewal_dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
-                        'methodology_note': 'Non-renewal analysis: grants that expired in past 6 months without renewal evidence (Times-style analysis)',
-                        'analysis_period': f'Past 6 months from {cutoff_date.strftime("%Y-%m-%d")} to {dt.now().strftime("%Y-%m-%d")}'
+                        'methodology_note': f'Non-renewal analysis: grants that expired in past 6 months without renewal evidence {"(cached data)" if using_cached_nonrenewal else "(fresh data)"}',
+                        'analysis_period': f'Past 6 months from {cutoff_date.strftime("%Y-%m-%d")} to {dt.now().strftime("%Y-%m-%d")}',
+                        '_data_source': 'cache_fallback' if using_cached_nonrenewal else 'fresh_api'
                     }
                 else:
                     nonrenewal_total_lost = cached_result['nonrenewal_grants_impact'].get('total_lost_funding', 0)
@@ -651,17 +758,27 @@ async def get_comprehensive_delayed_funding_analysis(
         
         result["last_updated"] = datetime.now().isoformat()
 
-        # Enrich with cancelled / terminated grant funding loss AND non-renewal funding loss BEFORE caching
+        # Enrich with cancelled / terminated grant funding loss AND non-renewal funding loss BEFORE caching - WITH CACHE FALLBACK
         try:
-            from layoff_estimator import fetch_terminated_grants, normalize_institution_name, fetch_institution_grants
+            from layoff_estimator import normalize_institution_name
             from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
             normalized_target = normalize_institution_name(institution_name)
             
-            # 1. CANCELLED/TERMINATED GRANTS ANALYSIS
-            terminated_grants = await fetch_terminated_grants()
-            nsf_all = await fetch_institution_grants(active_only=False, max_records_per_source=1000)
+            # 1. CANCELLED/TERMINATED GRANTS ANALYSIS - WITH CACHE FALLBACK
+            print("🔄 Fetching cancelled/terminated grants with cache fallback...")
+            terminated_grants = await get_terminated_grants_with_fallback()
+            nsf_all = await get_institution_funding_with_fallback(institution_name)
             nsf_terminated = [g for g in nsf_all if g.get('award_status', '').lower() in ['terminated','cancelled','expired']]
             combined_terminated = terminated_grants + nsf_terminated
+            
+            # Check if using fallback data
+            using_cached_terminated = any(g.get('_cache_fallback') for g in combined_terminated)
+            if using_cached_terminated:
+                print("⚠️ Using cached data for cancelled grants analysis (API unavailable)")
+                result["_data_reliability"] = "Using cached data due to API unavailability"
+            else:
+                print("✅ Using fresh API data for cancelled grants analysis")
+                result["_data_reliability"] = "Using fresh API data"
             
             pi_cache = load_pi_department_cache()
             cancelled_lost_by_pi = {}
@@ -707,14 +824,15 @@ async def get_comprehensive_delayed_funding_analysis(
                     } for pi in cancelled_pi_lost_list[:10]
                 ],
                 'department_losses': {k: round(v,2) for k,v in sorted(cancelled_dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
-                'methodology_note': 'Termination-based lost funding derived from NIH (past 12 months) + NSF terminated/cancelled/expired awards'
+                'methodology_note': f'Termination-based lost funding derived from NIH + NSF APIs {"(cached data)" if using_cached_terminated else "(fresh data)"}',
+                '_data_source': 'cache_fallback' if using_cached_terminated else 'fresh_api'
             }
             
-            # 2. NON-RENEWAL ANALYSIS (grants that expired without renewal)
-            # Get all grants for the institution including expired ones
-            all_grants = await fetch_institution_grants(active_only=False, max_records_per_source=2000)
+            # 2. NON-RENEWAL ANALYSIS (grants that expired without renewal) - WITH CACHE FALLBACK
+            print("🔄 Fetching all grants for non-renewal analysis with cache fallback...")
+            # Use the same cached institutional grants to avoid duplicate API calls
             all_grants_filtered = []
-            for grant in all_grants:
+            for grant in nsf_all:
                 org_info = grant.get('organization', {})
                 if isinstance(org_info, list) and org_info:
                     org_name = org_info[0].get('org_name','')
@@ -724,6 +842,11 @@ async def get_comprehensive_delayed_funding_analysis(
                     continue
                 if normalize_institution_name(org_name) == normalized_target:
                     all_grants_filtered.append(grant)
+            
+            # Check if using fallback data for non-renewal analysis
+            using_cached_nonrenewal = any(g.get('_cache_fallback') for g in nsf_all)
+            if using_cached_nonrenewal:
+                print("⚠️ Using cached data for non-renewal analysis (API unavailable)")
             
             # Use enhanced tracker to find non-renewals
             tracker = EnhancedDelayedFundingTracker()
@@ -793,7 +916,8 @@ async def get_comprehensive_delayed_funding_analysis(
                     } for pi in nonrenewal_pi_lost_list[:10]
                 ],
                 'department_losses': {k: round(v,2) for k,v in sorted(nonrenewal_dept_losses.items(), key=lambda kv: kv[1], reverse=True)[:10]},
-                'methodology_note': 'Non-renewal analysis: grants that expired in past 6 months without renewal evidence (Times-style analysis)',
+                'methodology_note': f'Non-renewal analysis: grants that expired in past 6 months without renewal evidence {"(cached data)" if using_cached_nonrenewal else "(fresh data)"}',
+                '_data_source': 'cache_fallback' if using_cached_nonrenewal else 'fresh_api',
                 'analysis_period': f'Past 6 months from {cutoff_date.strftime("%Y-%m-%d")} to {dt.now().strftime("%Y-%m-%d")}'
             }
             
@@ -818,7 +942,8 @@ async def get_comprehensive_delayed_funding_analysis(
                     'pis_impacted': 0,
                     'top_pis': [],
                     'department_losses': {},
-                    'methodology_note': 'Enrichment failed; no termination data available this run'
+                    'methodology_note': 'Enrichment failed; no termination data available this run',
+                    '_data_source': 'error_fallback'
                 }
             if 'nonrenewal_grants_impact' not in result:
                 result['nonrenewal_grants_impact'] = {
@@ -970,13 +1095,20 @@ async def generate_comprehensive_leaderboard(cost_per_researcher: float = 200000
         
         print(f"Cache loaded: {cache_stats['total_grants']:,} grants, ${cache_stats['total_funding']:,.0f}")
         
-        print("Fetching terminated grants from NIH/NSF (research-specific risk)...")
-        # Use NIH/NSF for terminated grants - research-specific risk analysis
-        terminated_grants = await fetch_terminated_grants()  # This gets NIH terminated
+        print("Fetching terminated grants from NIH/NSF (research-specific risk) with cache fallback...")
+        # Use cache fallback for terminated grants - research-specific risk analysis
+        terminated_grants = await get_terminated_grants_with_fallback()
+        using_cached_terminated = any(g.get('_cache_fallback') for g in terminated_grants)
         
-        # Also get NSF terminated grants
-        nsf_terminated = await fetch_institution_grants(active_only=False, max_records_per_source=1000)
+        # Also get NSF terminated grants with fallback
+        nsf_terminated = await get_institution_funding_with_fallback(active_only=False, max_records_per_source=1000)
         nsf_terminated = [g for g in nsf_terminated if g.get('award_status', '').lower() in ['terminated', 'cancelled', 'expired']]
+        using_cached_nsf = any(g.get('_cache_fallback') for g in nsf_terminated)
+        
+        # Track cache usage for reporting
+        using_cached_data = using_cached_terminated or using_cached_nsf
+        if using_cached_data:
+            print("⚠️ Using cached data for leaderboard analysis (API unavailable)")
         
         # Combine terminated research grants
         all_terminated_grants = terminated_grants + nsf_terminated
@@ -1159,9 +1291,10 @@ async def generate_comprehensive_leaderboard(cost_per_researcher: float = 200000
                 ],
                 "data_sources": [
                     f"Active funding: Cached USASpending.gov ({cache_stats['total_grants']:,} grants)",
-                    "Risk analysis: NIH RePORTER + NSF Awards (terminated research grants)",
+                    f"Risk analysis: NIH RePORTER + NSF Awards (terminated research grants) {'- cached data' if using_cached_data else '- fresh data'}",
                     "Rationale: Cached USASpending.gov eliminates API rate limits and $0 funding issues"
                 ],
+                "_data_source_reliability": 'cache_fallback' if using_cached_data else 'fresh_api',
                 "analysis_window": "12 months ahead"
             },
             "last_updated": datetime.now().isoformat()
