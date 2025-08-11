@@ -5,6 +5,7 @@ Clean FastAPI server for NSF-Tracker with enhanced multi-agency integration.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from datetime import datetime
 import asyncio
 import json
@@ -16,6 +17,9 @@ from department_costs import get_department_cost_per_researcher, get_department_
 from usaspending_cache_loader import get_usaspending_funding, get_usaspending_stats
 from delayed_funding_tracker import analyze_delayed_funding_for_institution, analyze_delayed_funding_with_departments
 import pandas as pd
+import io
+import csv
+from typing import Dict, Any
 
 async def fetch_with_cache_fallback(fetch_function, cache_key: str, *args, **kwargs):
     """
@@ -92,13 +96,18 @@ async def fetch_with_cache_fallback(fetch_function, cache_key: str, *args, **kwa
     print(f"💥 No data available for {cache_key} (API failed, no cache)")
     return []
 
-async def get_institution_funding_with_fallback(institution_name: str):
+async def get_institution_funding_with_fallback(organization: str = None, pi_name: str = None, active_only: bool = True, max_records_per_source: int = 1000):
     """Get institution funding data with cache fallback"""
-    cache_key = f"institution_funding_{normalize_institution_name(institution_name)}"
+    if organization:
+        cache_key = f"institution_funding_{normalize_institution_name(organization)}"
+    elif pi_name:
+        cache_key = f"pi_funding_{pi_name.replace(' ', '_')}"
+    else:
+        cache_key = f"institution_funding_general_{active_only}_{max_records_per_source}"
     
     # Define the fetch function
     async def fetch_data():
-        return await fetch_institution_grants(institution_name, active_only=True, max_records_per_source=1000)
+        return await fetch_institution_grants(organization=organization, pi_name=pi_name, active_only=active_only, max_records_per_source=max_records_per_source)
     
     return await fetch_with_cache_fallback(fetch_data, cache_key)
 
@@ -274,10 +283,20 @@ async def get_university_details(institution_name: str):
         try:
             delayed_funding_data = await analyze_delayed_funding_for_institution(normalized_institution)
             if delayed_funding_data and 'summary' in delayed_funding_data:
+                # Handle potential NaN values
+                undisbursed_amt = delayed_funding_data['summary']['total_undisbursed']
+                disbursement_eff = delayed_funding_data['summary']['disbursement_efficiency']
+                
+                # Check for NaN values and replace with safe defaults
+                if not isinstance(undisbursed_amt, (int, float)) or undisbursed_amt != undisbursed_amt:
+                    undisbursed_amt = 0
+                if not isinstance(disbursement_eff, (int, float)) or disbursement_eff != disbursement_eff:
+                    disbursement_eff = 0
+                    
                 delayed_funding_summary = {
                     "cash_flow_risk": delayed_funding_data['summary']['cash_flow_risk'],
-                    "undisbursed_amount": delayed_funding_data['summary']['total_undisbursed'],
-                    "disbursement_efficiency": delayed_funding_data['summary']['disbursement_efficiency'],
+                    "undisbursed_amount": undisbursed_amt,
+                    "disbursement_efficiency": f"{disbursement_eff*100:.1f}%" if isinstance(disbursement_eff, (int, float)) else "0.0%",
                     "delayed_awards_count": delayed_funding_data['summary']['awards_with_significant_delays']
                 }
         except Exception as e:
@@ -383,7 +402,7 @@ async def get_comprehensive_delayed_funding_analysis(
                 if 'cancelled_grants_impact' not in cached_result:
                     print("🔄 Adding cancelled grants analysis with cache fallback...")
                     terminated_grants = await get_terminated_grants_with_fallback()
-                    nsf_all = await get_institution_funding_with_fallback(institution_name)
+                    nsf_all = await get_institution_funding_with_fallback(organization=institution_name)
                     nsf_terminated = [g for g in nsf_all if g.get('award_status', '').lower() in ['terminated','cancelled','expired']]
                     combined_terminated = terminated_grants + nsf_terminated
                     
@@ -446,7 +465,7 @@ async def get_comprehensive_delayed_funding_analysis(
                 if 'nonrenewal_grants_impact' not in cached_result:
                     print("🔄 Adding non-renewal analysis with cache fallback...")
                     # Get all grants for non-renewal analysis with fallback
-                    all_grants = await get_institution_funding_with_fallback(institution_name)
+                    all_grants = await get_institution_funding_with_fallback(organization=institution_name)
                     
                     # Check if using fallback data
                     using_cached_nonrenewal = any(g.get('_cache_fallback') for g in all_grants)
@@ -598,13 +617,22 @@ async def get_comprehensive_delayed_funding_analysis(
                 summary = disbursement_data['summary']
                 
                 # Update financial overview
+                disbursement_eff = analysis.get('disbursement_efficiency', 0)
+                undisbursed_amt = analysis.get('undisbursed_amount', 0)
+                
+                # Handle NaN or infinity values
+                if not isinstance(disbursement_eff, (int, float)) or disbursement_eff != disbursement_eff or disbursement_eff == float('inf'):
+                    disbursement_eff = 0
+                if not isinstance(undisbursed_amt, (int, float)) or undisbursed_amt != undisbursed_amt or undisbursed_amt == float('inf'):
+                    undisbursed_amt = 0
+                    
                 result["financial_overview"] = {
                     "total_awarded": round(analysis.get('total_awarded_amount', 0), 2),
                     "total_obligated": round(analysis.get('total_obligated_amount', 0), 2),
                     "total_disbursed": round(analysis.get('total_outlayed_amount', 0), 2),
-                    "undisbursed_amount": round(analysis.get('undisbursed_amount', 0), 2),
-                    "disbursement_efficiency": f"{analysis.get('disbursement_efficiency', 0)*100:.1f}%",
-                    "undisbursed_percentage": f"{(analysis.get('undisbursed_amount', 0)/max(analysis.get('total_awarded_amount', 1), 1))*100:.1f}%"
+                    "undisbursed_amount": round(undisbursed_amt, 2),
+                    "disbursement_efficiency": f"{disbursement_eff*100:.1f}%",
+                    "undisbursed_percentage": f"{(undisbursed_amt/max(analysis.get('total_awarded_amount', 1), 1))*100:.1f}%"
                 }
                 
                 # Update delayed awards
@@ -767,7 +795,7 @@ async def get_comprehensive_delayed_funding_analysis(
             # 1. CANCELLED/TERMINATED GRANTS ANALYSIS - WITH CACHE FALLBACK
             print("🔄 Fetching cancelled/terminated grants with cache fallback...")
             terminated_grants = await get_terminated_grants_with_fallback()
-            nsf_all = await get_institution_funding_with_fallback(institution_name)
+            nsf_all = await get_institution_funding_with_fallback(organization=institution_name)
             nsf_terminated = [g for g in nsf_all if g.get('award_status', '').lower() in ['terminated','cancelled','expired']]
             combined_terminated = terminated_grants + nsf_terminated
             
@@ -970,6 +998,16 @@ async def get_comprehensive_delayed_funding_analysis(
             print(f"Cached comprehensive analysis for {institution_name} (enriched)")
         except Exception as e:
             print(f"Caching error: {e}")
+
+        # Add summary field for frontend compatibility
+        financial_overview = result.get('financial_overview', {})
+        overview = result.get('overview', {})
+        result['summary'] = {
+            'total_undisbursed': financial_overview.get('undisbursed_amount', overview.get('total_undisbursed', 0)),
+            'disbursement_efficiency': financial_overview.get('disbursement_efficiency', overview.get('disbursement_efficiency', '0.0%')),
+            'delayed_funding_risk': overview.get('risk_score', result.get('cash_flow_risk', {}).get('score', 0)),
+            'cash_flow_risk': result.get('cash_flow_risk', {'level': 'UNKNOWN', 'score': 0})
+        }
         
         return result
     except Exception as e:
@@ -1614,6 +1652,270 @@ async def get_institution_grants_endpoint(institution: str, limit: int = 100):
         return {
             "error": f"Error fetching institution grants: {str(e)}"
         }
+
+def convert_enhanced_analysis_to_csv(analysis_data: Dict[Any, Any], institution_name: str) -> str:
+    """
+    Convert enhanced delayed funding analysis to CSV format
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header section
+    writer.writerow(['Enhanced Delayed Funding Analysis Report'])
+    writer.writerow(['Institution:', institution_name])
+    writer.writerow(['Generated:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    writer.writerow([])  # Empty row
+    
+    # Summary section
+    summary_data = {}
+    
+    # Extract summary from multiple possible locations
+    if 'summary' in analysis_data:
+        summary_data = analysis_data['summary']
+    elif 'overview' in analysis_data:
+        summary_data = analysis_data['overview']
+    elif 'financial_overview' in analysis_data:
+        financial = analysis_data['financial_overview']
+        summary_data = {
+            'total_undisbursed': financial.get('undisbursed_amount', 0),
+            'disbursement_efficiency': financial.get('disbursement_efficiency', '0.0%'),
+            'delayed_funding_risk': analysis_data.get('overview', {}).get('risk_score', 0)
+        }
+        # Add cash flow risk from the main structure
+        if 'cash_flow_risk' in analysis_data:
+            summary_data['cash_flow_risk'] = analysis_data['cash_flow_risk']
+    
+    if summary_data:
+        writer.writerow(['SUMMARY METRICS'])
+        writer.writerow(['Metric', 'Value'])
+        
+        if 'total_undisbursed' in summary_data:
+            undisbursed = summary_data['total_undisbursed']
+            if isinstance(undisbursed, (int, float)) and undisbursed == undisbursed:  # Check for NaN
+                writer.writerow(['Total Undisbursed Amount', f"${undisbursed:,.2f}"])
+            else:
+                writer.writerow(['Total Undisbursed Amount', '$0.00'])
+                
+        if 'disbursement_efficiency' in summary_data:
+            writer.writerow(['Disbursement Efficiency', summary_data['disbursement_efficiency']])
+            
+        if 'delayed_funding_risk' in summary_data:
+            writer.writerow(['Delayed Funding Risk Score', summary_data['delayed_funding_risk']])
+            
+        if 'cash_flow_risk' in summary_data:
+            risk_info = summary_data['cash_flow_risk']
+            if isinstance(risk_info, dict):
+                writer.writerow(['Cash Flow Risk Level', risk_info.get('level', 'Unknown')])
+                writer.writerow(['Cash Flow Risk Score', risk_info.get('score', 'N/A')])
+        
+        writer.writerow([])  # Empty row
+    
+    # Grants with undisbursed funds
+    grants_to_include = []
+    
+    # Get grants from different possible locations
+    if 'grants_with_undisbursed' in analysis_data:
+        grants_to_include.extend(analysis_data['grants_with_undisbursed'])
+    elif 'sample_delayed_awards' in analysis_data:
+        grants_to_include.extend(analysis_data['sample_delayed_awards'])
+    elif 'delayed_awards' in analysis_data and 'awards_details' in analysis_data['delayed_awards']:
+        grants_to_include.extend(analysis_data['delayed_awards']['awards_details'])
+    
+    # Also include grants from enhanced analysis renewal data
+    if 'enhanced_analysis' in analysis_data and 'renewal_analysis' in analysis_data['enhanced_analysis']:
+        renewal_data = analysis_data['enhanced_analysis']['renewal_analysis']
+        if 'detailed_missing_renewals' in renewal_data:
+            for missing_renewal in renewal_data['detailed_missing_renewals']:
+                grant_info = missing_renewal.get('grant', {})
+                grants_to_include.append({
+                    'award_id': grant_info.get('project_num', ''),
+                    'title': grant_info.get('project_title', ''),
+                    'pi_name': grant_info.get('contact_pi_name', ''),
+                    'funding_agency': grant_info.get('funding_agency', ''),
+                    'total_award_amount': missing_renewal.get('award_amount', 0),
+                    'undisbursed_amount': missing_renewal.get('award_amount', 0),  # Missing renewals = undisbursed
+                    'award_start_date': grant_info.get('project_start_date', ''),
+                    'award_end_date': grant_info.get('project_end_date', ''),
+                    'status': f"Renewal overdue by {missing_renewal.get('days_overdue', 0)} days"
+                })
+    
+    if grants_to_include and len(grants_to_include) > 0:
+        writer.writerow(['GRANTS WITH UNDISBURSED FUNDS'])
+        writer.writerow(['Award ID', 'Title', 'PI/Contact', 'Agency', 'Total Award', 'Undisbursed Amount', 'Start Date', 'End Date', 'Status'])
+        
+        for grant in grants_to_include:
+            award_id = grant.get('award_id', grant.get('Award ID', ''))
+            title = grant.get('title', grant.get('project_title', grant.get('Award Description', ''))) or ''
+            pi_name = grant.get('pi_name', grant.get('contact_pi_name', grant.get('pi_name', 'Unknown PI')))
+            agency = grant.get('funding_agency', grant.get('Awarding Agency', ''))
+            total_award = grant.get('total_award_amount', grant.get('Award Amount', 0))
+            undisbursed = grant.get('undisbursed_amount', grant.get('Award Amount', 0))
+            start_date = grant.get('award_start_date', grant.get('Start Date', ''))
+            end_date = grant.get('award_end_date', grant.get('End Date', ''))
+            status = grant.get('status', grant.get('delay_type', 'Delayed disbursement'))
+            
+            writer.writerow([
+                award_id,
+                title[:100] + ('...' if len(title) > 100 else ''),
+                pi_name,
+                agency,
+                f"${total_award:,.2f}" if isinstance(total_award, (int, float)) else str(total_award),
+                f"${undisbursed:,.2f}" if isinstance(undisbursed, (int, float)) else str(undisbursed),
+                start_date,
+                end_date,
+                status
+            ])
+        
+        writer.writerow([])  # Empty row
+    
+    # Department breakdown
+    if 'department_analysis' in analysis_data:
+        dept_analysis = analysis_data['department_analysis']
+        if dept_analysis and 'departments' in dept_analysis:
+            departments_data = dept_analysis['departments']
+            writer.writerow(['DEPARTMENT BREAKDOWN'])
+            writer.writerow(['Department', 'Grant Count', 'Total Undisbursed', 'Risk Level'])
+            
+            # Handle both dict and list formats
+            if isinstance(departments_data, dict):
+                for dept_name, dept_data in departments_data.items():
+                    writer.writerow([
+                        dept_name,
+                        dept_data.get('grant_count', 0),
+                        f"${dept_data.get('total_undisbursed', 0):,.2f}",
+                        dept_data.get('risk_level', 'Unknown')
+                    ])
+            elif isinstance(departments_data, list):
+                for dept_data in departments_data:
+                    writer.writerow([
+                        dept_data.get('department', 'Unknown'),
+                        dept_data.get('grant_count', 0),
+                        f"${dept_data.get('total_undisbursed', 0):,.2f}",
+                        dept_data.get('risk_level', 'Unknown')
+                    ])
+            
+            writer.writerow([])  # Empty row
+    
+    # Cancelled grants impact
+    cancelled_grants = []
+    if 'cancelled_grants_impact' in analysis_data:
+        cancelled_data = analysis_data['cancelled_grants_impact']
+        if 'terminated_grants' in cancelled_data and cancelled_data['terminated_grants']:
+            cancelled_grants.extend(cancelled_data['terminated_grants'])
+    
+    # Non-renewal grants impact
+    nonrenewal_grants = []
+    if 'nonrenewal_grants_impact' in analysis_data:
+        nonrenewal_data = analysis_data['nonrenewal_grants_impact']
+        if 'expired_grants' in nonrenewal_data and nonrenewal_data['expired_grants']:
+            nonrenewal_grants.extend(nonrenewal_data['expired_grants'])
+    
+    # Combine cancelled and non-renewal grants
+    all_terminated_grants = cancelled_grants + nonrenewal_grants
+    
+    if all_terminated_grants and len(all_terminated_grants) > 0:
+        writer.writerow(['CANCELLED/TERMINATED & NON-RENEWAL GRANTS'])
+        writer.writerow(['Award ID', 'Title', 'PI/Contact', 'Agency', 'Lost Funding', 'Issue Type', 'Date'])
+        
+        for grant in all_terminated_grants:
+            issue_type = "Cancelled/Terminated"
+            date_field = grant.get('termination_date', grant.get('end_date', ''))
+            title = grant.get('title', grant.get('project_title', '')) or ''
+            
+            # Check if this is a non-renewal
+            if grant in nonrenewal_grants or 'expired' in grant.get('status', '').lower():
+                issue_type = "Non-Renewal"
+            
+            writer.writerow([
+                grant.get('award_id', grant.get('project_num', '')),
+                title[:100] + ('...' if len(title) > 100 else ''),
+                grant.get('pi_name', grant.get('contact_pi_name', '')),
+                grant.get('funding_agency', ''),
+                f"${grant.get('lost_funding', grant.get('award_amount', 0)):,.2f}",
+                issue_type,
+                date_field
+            ])
+        
+        writer.writerow([])  # Empty row
+    
+    # Add summary of funding impacts
+    if 'cancelled_grants_impact' in analysis_data or 'nonrenewal_grants_impact' in analysis_data:
+        writer.writerow(['FUNDING IMPACT SUMMARY'])
+        writer.writerow(['Impact Type', 'Total Lost Funding', 'PIs Affected'])
+        
+        if 'cancelled_grants_impact' in analysis_data:
+            cancelled_impact = analysis_data['cancelled_grants_impact']
+            writer.writerow([
+                'Cancelled/Terminated Grants',
+                f"${cancelled_impact.get('total_lost_funding', 0):,.2f}",
+                cancelled_impact.get('pis_impacted', 0)
+            ])
+        
+        if 'nonrenewal_grants_impact' in analysis_data:
+            nonrenewal_impact = analysis_data['nonrenewal_grants_impact']
+            writer.writerow([
+                'Non-Renewal Grants',
+                f"${nonrenewal_impact.get('total_lost_funding', 0):,.2f}",
+                nonrenewal_impact.get('pis_impacted', 0)
+            ])
+        
+        writer.writerow([])  # Empty row
+    
+    # Recommendations
+    if 'recommendations' in analysis_data:
+        recommendations = analysis_data['recommendations']
+        if recommendations and len(recommendations) > 0:
+            writer.writerow(['RECOMMENDATIONS'])
+            writer.writerow(['Priority', 'Recommendation'])
+            
+            for i, rec in enumerate(recommendations, 1):
+                writer.writerow([f'Priority {i}', rec])
+    
+    return output.getvalue()
+
+@app.get("/api/enhanced-delayed-funding/{institution_name}/csv")
+async def download_enhanced_delayed_funding_csv(institution_name: str, method: str = "comprehensive"):
+    """
+    Download enhanced delayed funding analysis as CSV file
+    """
+    try:
+        print(f"🔍 CSV Download requested for: {institution_name}")
+        
+        # Get the analysis data
+        analysis_data = await get_comprehensive_delayed_funding_analysis(
+            institution_name, 
+            include_departments=True, 
+            method=method
+        )
+        
+        print(f"🔍 Analysis data received, keys: {list(analysis_data.keys())}")
+        
+        if 'error' in analysis_data:
+            print(f"❌ Error in analysis data: {analysis_data['error']}")
+            raise HTTPException(status_code=404, detail=analysis_data['error'])
+        
+        # Convert to CSV
+        print("🔄 Converting to CSV...")
+        csv_content = convert_enhanced_analysis_to_csv(analysis_data, institution_name)
+        print(f"✅ CSV content generated, length: {len(csv_content)}")
+        
+        # Create filename with institution name and date
+        safe_institution_name = "".join(c for c in institution_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        filename = f"enhanced_funding_analysis_{safe_institution_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        print(f"📄 Filename: {filename}")
+        
+        # Return simple response
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+        
+    except Exception as e:
+        print(f"❌ Error generating CSV: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generating CSV: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

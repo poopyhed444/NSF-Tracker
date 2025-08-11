@@ -1,0 +1,36 @@
+Enhanced Delayed Funding Analysis Report
+Institution:,Harvard University
+Generated:,2025-08-10 23:26:36
+
+SUMMARY METRICS
+Metric,Value
+Total Undisbursed Amount,"$49,880.00"
+Disbursement Efficiency,0.0%
+
+GRANTS WITH UNDISBURSED FUNDS
+Award ID,Title,PI/Contact,Agency,Total Award,Undisbursed Amount,Start Date,End Date,Status
+SCI80019GR0007,,Unknown PI,Department of State,"$49,880.00","$49,880.00",2019-02-14,2020-12-30,Delayed disbursement
+1RF1AG081475-01,Writing and erasing O-GlcNAc on target proteins in the brain,"WOO, CHRISTINA ",NIH,"$1,756,251.00","$1,756,251.00",2023-04-15T00:00:00,2026-03-31T00:00:00,Renewal overdue by 117 days
+4R01NS121874-02,Structural Variation in Neuronal Circuits as a Basis for Functional and Behavioral Individuality,"LEE, WEI-CHUNG ALLEN",NIH,"$988,531.00","$988,531.00",2021-05-01T00:00:00,2026-04-30T00:00:00,Renewal overdue by 101 days
+7R01ES031252-05,A Randomized Controlled Trial of Home Air Purification for Eosinophilic COPD,"RICE, MARY B",NIH,"$754,541.00","$754,541.00",2020-05-15T00:00:00,2026-02-28T00:00:00,Renewal overdue by 87 days
+5T32HL007118-47,Training Program in Molecular and Integrative Physiological Sciences,"FREDBERG, JEFFREY J",NIH,"$752,646.00","$752,646.00",1975-07-01T00:00:00,2026-06-30T00:00:00,Renewal overdue by 40 days
+2P30AI060354-21,Biostatistics and Bioinformatics Core,"PARKER, ROBERT A.",NIH,"$712,739.00","$712,739.00",2004-07-01T00:00:00,2029-05-31T00:00:00,Renewal overdue by 40 days
+5R01ES031657-05,The Impact of Maternal and Paternal Preconception Perfluoroalkyl Substance (PFAS) Exposure on Reprod...,"MAHALINGAIAH, SHRUTHI ",NIH,"$561,279.00","$561,279.00",2020-05-11T00:00:00,2026-02-28T00:00:00,Renewal overdue by 91 days
+5P30ES000002-60,Pilot Project Program,"HART, JAMIE ",NIH,"$481,495.00","$481,495.00",1997-04-01T00:00:00,2026-03-31T00:00:00,Renewal overdue by 131 days
+2R01HD032443-26A1,Dissecting the genetic underpinnings of heterochrony in limb bud initiation,"TABIN, CLIFFORD J.",NIH,"$450,712.00","$450,712.00",1995-03-01T00:00:00,2029-11-30T00:00:00,Renewal overdue by 162 days
+2P30AI060354-21,Advanced Lab Technologies Core,"LINGWOOD, DANIEL ",NIH,"$411,028.00","$411,028.00",2004-07-01T00:00:00,2029-05-31T00:00:00,Renewal overdue by 40 days
+3R01HG012287-12S1,Solving ascertainment bias in ancient DNA using Ultima Genomics sequencing,"REICH, DAVID E",NIH,"$396,455.00","$396,455.00",2021-06-15T00:00:00,2026-03-31T00:00:00,Renewal overdue by 56 days
+
+DEPARTMENT BREAKDOWN
+Department,Grant Count,Total Undisbursed,Risk Level
+Unknown Department,0,"$49,880.00",CRITICAL
+
+FUNDING IMPACT SUMMARY
+Impact Type,Total Lost Funding,PIs Affected
+Cancelled/Terminated Grants,"$249,934.00",1
+Non-Renewal Grants,$0.00,0
+
+RECOMMENDATIONS
+Priority,Recommendation
+Priority 1,priority_departments
+Priority 2,next_steps

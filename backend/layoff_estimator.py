@@ -29,6 +29,7 @@ This separation ensures:
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import httpx
+import asyncio
 import re
 from collections import defaultdict
 from department_costs import (
@@ -153,8 +154,8 @@ async def fetch_active_grants(organization: str = None, pi_name: str = None, use
     search_criteria = {
         "criteria": {
             "fiscal_years": [2022, 2023, 2024, 2025, 2026],  # Extended year range
-            "project_types": ["RESEARCH", "TRAINING", "CAREER", "OTHER_RESEARCH"],
-            "award_types": ["ALL"]
+            "project_types": ["RESEARCH", "TRAINING", "CAREER", "OTHER_RESEARCH"]
+            # Removed award_types: ["ALL"] - this was causing 0 results
         },
         "include_fields": [
             "AwardAmount", "ContactPiName", "ProjectTitle", "ProjectStartDate",
@@ -170,11 +171,26 @@ async def fetch_active_grants(organization: str = None, pi_name: str = None, use
     
     # Add organization filter if specified
     if organization:
-        search_criteria["criteria"]["org_names"] = [organization]
+        # NIH API expects exact organization name matching or partial matching
+        # Try multiple variations of the organization name
+        org_variations = [
+            organization,
+            organization.upper(),
+            organization.title(),
+            # Remove common suffixes that might cause matching issues
+            re.sub(r'\s+(UNIVERSITY|COLLEGE|INSTITUTE|SCHOOL).*$', '', organization, flags=re.IGNORECASE),
+            # Add "UNIVERSITY" if not present
+            f"{organization} UNIVERSITY" if "UNIVERSITY" not in organization.upper() else organization
+        ]
+        search_criteria["criteria"]["org_names"] = org_variations
+        print(f"  🔍 Searching for organization variations: {org_variations}")
     
     # Add PI filter if specified
     if pi_name:
         search_criteria["criteria"]["pi_names"] = [pi_name]
+        print(f"  🔍 Searching for PI: {pi_name}")
+    
+    print(f"  📋 NIH Search criteria: {search_criteria}")  # Debug output
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         while len(all_grants) < max_records:
@@ -214,6 +230,24 @@ async def fetch_active_grants(organization: str = None, pi_name: str = None, use
                 all_grants.extend(university_grants)
                 print(f"  ✅ Added {len(university_grants):,} university grants (total: {len(all_grants):,})")
                 
+                # 🚀 OPTIMIZATION: Save to cache incrementally after each batch
+                # This prevents data loss if the process is interrupted
+                if use_cache and organization is None and pi_name is None and len(all_grants) >= 1000:
+                    # Save every 1000 grants or when we cross the 1000 threshold
+                    batch_num = offset//batch_size + 1
+                    if batch_num % 2 == 0 or len(all_grants) >= 1000:  # Every 2nd batch or after 1000 grants
+                        try:
+                            save_nih_cache(all_grants, {
+                                "max_records": max_records, 
+                                "total_fetched": len(all_grants),
+                                "status": "incremental_save",
+                                "batch_number": batch_num,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                            print(f"  💾 Incremental NIH cache save: {len(all_grants):,} grants")
+                        except Exception as cache_error:
+                            print(f"  ⚠️ Incremental cache save failed: {cache_error}")
+                
                 # If we got fewer results than requested, we've reached the end
                 if len(batch_results) < current_batch_size:
                     break
@@ -232,16 +266,30 @@ async def fetch_active_grants(organization: str = None, pi_name: str = None, use
     
     # Enhanced cache saving with metadata
     if use_cache and organization is None and pi_name is None:
-        save_nih_cache(all_grants, {
-            "max_records": max_records, 
-            "total_fetched": len(all_grants),
-            "institutions": len(set(
-                grant.get("organization", [{}])[0].get("org_name", "") 
-                for grant in all_grants 
-                if grant.get("organization")
-            )),
-            "date_range": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
-        })
+        try:
+            # Safe institution counting
+            institutions = set()
+            for grant in all_grants:
+                org_info = grant.get("organization", {})
+                if isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get("org_name", "")
+                elif isinstance(org_info, dict):
+                    org_name = org_info.get("org_name", "")
+                else:
+                    org_name = ""
+                if org_name:
+                    institutions.add(org_name)
+            
+            save_nih_cache(all_grants, {
+                "max_records": max_records, 
+                "total_fetched": len(all_grants),
+                "institutions": len(institutions),
+                "date_range": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+            })
+        except Exception as e:
+            print(f"⚠️ Error saving final NIH cache: {e}")
+            # Still save the basic cache without metadata
+            save_nih_cache(all_grants, {"total_fetched": len(all_grants)})
     
     return all_grants
 
@@ -309,14 +357,25 @@ async def fetch_nsf_grants(organization: str = None, pi_name: str = None, active
             
             # Add filters
             if organization:
-                params["awardeeState"] = organization  # NSF uses state-based org filtering
+                # NSF API supports organization name filtering via awardeeName
+                params["awardeeName"] = organization
+                print(f"  🔍 Searching NSF for organization: {organization}")
             if pi_name:
                 params["pdPIName"] = pi_name
+                print(f"  🔍 Searching NSF for PI: {pi_name}")
+            
+            print(f"  📋 NSF Search params: {params}")  # Debug output
             
             # Enhanced filter for active grants with broader date range
             if active_only:
                 params["startDateStart"] = "01/01/2020"  # Extended to 2020 for better coverage
                 params["expDateStart"] = datetime.now().strftime("%m/%d/%Y")  # Not yet expired
+            else:
+                # Even when not filtering for active grants, we still need some date range
+                # to get reasonable results from NSF API. Include broader historical range.
+                params["startDateStart"] = "01/01/2015"  # Broader historical range
+                # Don't set expDateStart so we get both active and expired grants
+                print(f"  📅 Searching NSF with broader date range (including expired grants)")
             
             try:
                 print(f"  📥 Fetching NSF batch {(offset-1)//batch_size + 1} (offset {offset:,})...")
@@ -345,6 +404,24 @@ async def fetch_nsf_grants(organization: str = None, pi_name: str = None, active
                 
                 all_grants.extend(university_grants)
                 print(f"  ✅ Added {len(university_grants):,} university grants (total: {len(all_grants):,})")
+                
+                # 🚀 OPTIMIZATION: Save to cache incrementally after each batch
+                # This prevents data loss if the process is interrupted
+                if use_cache and organization is None and pi_name is None and len(all_grants) >= 1000:
+                    # Save every 2nd batch or when we cross the 1000 threshold
+                    batch_num = (offset-1)//batch_size + 1
+                    if batch_num % 2 == 0 or len(all_grants) >= 1000:
+                        try:
+                            save_nsf_cache(all_grants, {
+                                "max_records": max_records, 
+                                "total_fetched": len(all_grants),
+                                "status": "incremental_save",
+                                "batch_number": batch_num,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                            print(f"  💾 Incremental NSF cache save: {len(all_grants):,} grants")
+                        except Exception as cache_error:
+                            print(f"  ⚠️ Incremental cache save failed: {cache_error}")
                 
                 # If we got fewer results than requested, we've reached the end
                 if len(nsf_awards) < current_batch_size:
@@ -505,6 +582,38 @@ async def fetch_institution_grants(organization: str = None, pi_name: str = None
         nsf_count = len([g for g in all_grants if g.get("funding_agency") == "NSF"])
         
         print(f"Institution grants total: {len(all_grants)} grants ({nih_count} NIH + {nsf_count} NSF)")
+        
+        # 🚀 OPTIMIZATION: Cache the combined institution grants for faster future access
+        if use_cache:
+            try:
+                cache_key = f"institution_grants_{organization or 'all'}_{pi_name or 'all'}_{active_only}_{max_records_per_source}"
+                # Use the save_combined_cache function from our cache fallback system
+                cache_data = get_combined_cache() or []
+                
+                # Remove any existing cache for this query
+                cache_data = [item for item in cache_data if item.get('cache_key') != cache_key]
+                
+                # Add new cache entry
+                cache_data.append({
+                    'cache_key': cache_key,
+                    'cached_at': datetime.now().isoformat(),
+                    'data': all_grants,
+                    'source': 'institution_grants_api',
+                    'metadata': {
+                        'organization': organization,
+                        'pi_name': pi_name,
+                        'active_only': active_only,
+                        'nih_count': nih_count,
+                        'nsf_count': nsf_count,
+                        'total_count': len(all_grants)
+                    }
+                })
+                
+                save_combined_cache(cache_data)
+                print(f"  💾 Cached combined institution grants ({len(all_grants)} total)")
+                
+            except Exception as cache_error:
+                print(f"  ⚠️ Could not cache institution grants: {cache_error}")
         
         return all_grants
         

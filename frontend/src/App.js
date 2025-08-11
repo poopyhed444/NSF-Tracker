@@ -62,7 +62,7 @@ function App() {
       setDelayedFundingLoading(true);
       setError(null);
       
-      const response = await axios.get(`/api/delayed-funding/${encodeURIComponent(institutionName)}`);
+      const response = await axios.get(`/api/enhanced-delayed-funding/${encodeURIComponent(institutionName)}`);
       setDelayedFundingData(response.data);
       setShowDelayedFundingAnalysis(true);
     } catch (err) {
@@ -89,11 +89,88 @@ function App() {
     }
   };
 
+  const downloadDelayedFundingCSV = async (institutionName) => {
+    try {
+      // Try to use the CSV endpoint first
+      try {
+        const response = await axios.get(`/api/enhanced-delayed-funding/${encodeURIComponent(institutionName)}/csv`, {
+          responseType: 'blob'
+        });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Generate filename
+        const safeInstitutionName = institutionName.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        link.setAttribute('download', `enhanced_funding_analysis_${safeInstitutionName}_${timestamp}.csv`);
+        
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        
+        // Clean up
+        window.URL.revokeObjectURL(url);
+        
+      } catch (csvError) {
+        // Fallback: generate CSV from analysis data
+        console.log('CSV endpoint failed, generating from analysis data:', csvError);
+        
+        // Get the analysis data
+        const response = await axios.get(`/api/enhanced-delayed-funding/${encodeURIComponent(institutionName)}`);
+        const analysisData = response.data;
+        
+        // Generate CSV content manually
+        let csvContent = "Enhanced Delayed Funding Analysis Report\n";
+        csvContent += `Institution:,${institutionName}\n`;
+        csvContent += `Generated:,${new Date().toLocaleString()}\n\n`;
+        
+        // Summary
+        csvContent += "SUMMARY METRICS\n";
+        csvContent += "Metric,Value\n";
+        
+        const summary = analysisData.summary || analysisData.overview || analysisData.financial_overview || {};
+        const undisbursed = summary.total_undisbursed || summary.undisbursed_amount || 0;
+        const efficiency = summary.disbursement_efficiency || '0.0%';
+        
+        csvContent += `Total Undisbursed Amount,"$${isNaN(undisbursed) ? 0 : undisbursed.toLocaleString()}"\n`;
+        csvContent += `Disbursement Efficiency,${efficiency}\n`;
+        
+        // Create and download
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        const safeInstitutionName = institutionName.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        link.setAttribute('download', `enhanced_funding_analysis_${safeInstitutionName}_${timestamp}.csv`);
+        
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      }
+      
+    } catch (err) {
+      setError(`Failed to download CSV: ${err.message}`);
+      console.error('Error downloading CSV:', err);
+    }
+  };
+
   useEffect(() => {
     fetchLeaderboard();
   }, []);
 
   const formatCurrency = (amount) => {
+    // Handle NaN, null, undefined, and invalid values
+    if (amount == null || isNaN(amount) || amount === '' || typeof amount === 'string') {
+      return '$0';
+    }
+    
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -451,6 +528,19 @@ function App() {
             >
               {delayedFundingLoading ? 'Loading...' : '🏢 Delayed Funding by Department'}
             </button>
+            <button 
+              onClick={() => downloadDelayedFundingCSV(institution.institution)}
+              style={{
+                padding: '8px 16px',
+                border: '1px solid #4caf50',
+                borderRadius: '5px',
+                background: 'white',
+                color: '#4caf50',
+                cursor: 'pointer'
+              }}
+            >
+              📊 Download CSV Report
+            </button>
           </div>
           <h2 style={{ color: '#333', margin: '0 0 20px 0' }}>
             {institution.institution} - Cancelled Grants by Department
@@ -536,25 +626,25 @@ function App() {
               <div className="delayed-funding-section" style={{ 
                 marginBottom: '30px', 
                 padding: '20px', 
-                backgroundColor: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '#ffebee' : 
-                                institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' ? '#fff3e0' : '#f3e5f5', 
+                backgroundColor: institutionDetails.delayed_funding.cash_flow_risk?.level === 'CRITICAL' ? '#ffebee' : 
+                                institutionDetails.delayed_funding.cash_flow_risk?.level === 'HIGH' ? '#fff3e0' : '#f3e5f5', 
                 borderRadius: '8px',
-                border: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '2px solid #f44336' :
-                        institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' ? '2px solid #ff9800' : '1px solid #ddd'
+                border: institutionDetails.delayed_funding.cash_flow_risk?.level === 'CRITICAL' ? '2px solid #f44336' :
+                        institutionDetails.delayed_funding.cash_flow_risk?.level === 'HIGH' ? '2px solid #ff9800' : '1px solid #ddd'
               }}>
-                <h3 style={{ color: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '#d32f2f' : '#333' }}>
+                <h3 style={{ color: institutionDetails.delayed_funding.cash_flow_risk?.level === 'CRITICAL' ? '#d32f2f' : '#333' }}>
                   Cash Flow & Delayed Funding Analysis
-                  {institutionDetails.delayed_funding.cash_flow_risk !== 'UNKNOWN' && (
+                  {institutionDetails.delayed_funding.cash_flow_risk?.level && institutionDetails.delayed_funding.cash_flow_risk.level !== 'UNKNOWN' && (
                     <span style={{ 
                       marginLeft: '10px', 
                       padding: '4px 8px', 
                       borderRadius: '4px', 
                       fontSize: '12px', 
-                      backgroundColor: institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' ? '#f44336' : 
-                                      institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' ? '#ff9800' : '#4caf50',
+                      backgroundColor: institutionDetails.delayed_funding.cash_flow_risk.level === 'CRITICAL' ? '#f44336' : 
+                                      institutionDetails.delayed_funding.cash_flow_risk.level === 'HIGH' ? '#ff9800' : '#4caf50',
                       color: 'white'
                     }}>
-                      {institutionDetails.delayed_funding.cash_flow_risk}
+                      {institutionDetails.delayed_funding.cash_flow_risk.level}
                     </span>
                   )}
                 </h3>
@@ -584,7 +674,7 @@ function App() {
                     </div>
                   </div>
                 )}
-                {institutionDetails.delayed_funding.cash_flow_risk === 'CRITICAL' && (
+                {institutionDetails.delayed_funding.cash_flow_risk?.level === 'CRITICAL' && (
                   <div style={{ 
                     marginTop: '15px', 
                     padding: '10px', 
@@ -597,7 +687,7 @@ function App() {
                     Immediate attention to disbursement delays is recommended.
                   </div>
                 )}
-                {institutionDetails.delayed_funding.cash_flow_risk === 'HIGH' && (
+                {institutionDetails.delayed_funding.cash_flow_risk?.level === 'HIGH' && (
                   <div style={{ 
                     marginTop: '15px', 
                     padding: '10px', 

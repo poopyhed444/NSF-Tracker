@@ -434,12 +434,19 @@ class DelayedFundingTracker:
                 analysis['methodology_note'] = 'Times-style renewal analysis (USASpending disbursement data unavailable)'
             else:
                 # Use traditional disbursement analysis
-                analysis['disbursement_efficiency'] = analysis['total_outlayed_amount'] / analysis['total_awarded_amount']
-                analysis['undisbursed_amount'] = analysis['total_awarded_amount'] - analysis['total_outlayed_amount']
+                if analysis['total_awarded_amount'] > 0:
+                    analysis['disbursement_efficiency'] = analysis['total_outlayed_amount'] / analysis['total_awarded_amount']
+                    analysis['undisbursed_amount'] = analysis['total_awarded_amount'] - analysis['total_outlayed_amount']
+                else:
+                    analysis['disbursement_efficiency'] = 0
+                    analysis['undisbursed_amount'] = 0
                 analysis['methodology_note'] = 'Disbursement tracking + renewal analysis'
             
             # Calculate delayed funding risk score (0-100)
-            undisbursed_rate = analysis['undisbursed_amount'] / analysis['total_awarded_amount']
+            if analysis['total_awarded_amount'] > 0:
+                undisbursed_rate = analysis['undisbursed_amount'] / analysis['total_awarded_amount']
+            else:
+                undisbursed_rate = 0
             delay_frequency = analysis['delayed_awards_count'] / analysis['total_awards'] if analysis['total_awards'] > 0 else 0
             
             analysis['delayed_funding_risk'] = min(100, (undisbursed_rate * 60) + (delay_frequency * 40))

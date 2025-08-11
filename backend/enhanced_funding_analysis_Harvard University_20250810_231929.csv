@@ -1,0 +1,12 @@
+Enhanced Delayed Funding Analysis Report
+Institution:,Harvard University
+Generated:,2025-08-10 23:19:29
+
+DEPARTMENT BREAKDOWN
+Department,Grant Count,Total Undisbursed,Risk Level
+Unknown Department,0,"$49,880.00",CRITICAL
+
+RECOMMENDATIONS
+Priority,Recommendation
+Priority 1,priority_departments
+Priority 2,next_steps
