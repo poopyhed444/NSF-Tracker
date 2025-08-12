@@ -1594,43 +1594,81 @@ async def get_institution_total_funding(institution: str = None, active_only: bo
         }
 
 async def fetch_terminated_grants() -> List[Dict[str, Any]]:
-    """Fetch recently terminated grants for analysis (NIH only)."""
+    """Fetch recently terminated grants for analysis with comprehensive search (NIH only)."""
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=365)
+    start_date = end_date - timedelta(days=1095)  # 3 years instead of 1
     
-    search_criteria = {
-        "criteria": {
-            "project_end_date": {
-                "from_date": start_date.strftime("%Y-%m-%d"),
-                "to_date": end_date.strftime("%Y-%m-%d")
-            }
-        },
-        "include_fields": [
-            "Organization",
-            "ProjectTitle",
-            "ProjectEndDate",
-            "ProjectStartDate",
-            "AwardAmount",
-            "FiscalYear",
-            "ContactPiName"
-        ],
-        "offset": 0,
-        "limit": 500
-    }
+    all_terminated_grants = []
+    batch_size = 500
+    max_offset = 2000  # Fetch up to 2000 grants in batches
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(NIH_API_URL, json=search_criteria)
-            response.raise_for_status()
-            data = response.json()
-            print(f"Fetched {len(data.get('results', []))} terminated grants from NIH API")
-            return data.get("results", [])
-        except httpx.RequestError as e:
-            print(f"Error fetching terminated grants: {e}")
-            return []
-        except httpx.HTTPStatusError as e:
-            print(f"HTTP error fetching terminated grants: {e}")
-            return []
+    for offset in range(0, max_offset, batch_size):
+        search_criteria = {
+            "criteria": {
+                "project_end_date": {
+                    "from_date": start_date.strftime("%Y-%m-%d"),
+                    "to_date": end_date.strftime("%Y-%m-%d")
+                }
+            },
+            "include_fields": [
+                "Organization",
+                "ProjectTitle",
+                "ProjectEndDate",
+                "ProjectStartDate",
+                "AwardAmount",
+                "FiscalYear",
+                "ContactPiName",
+                "ProjectNum",
+                "AwardNoticeDate"
+            ],
+            "offset": offset,
+            "limit": batch_size
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(NIH_API_URL, json=search_criteria)
+                response.raise_for_status()
+                data = response.json()
+                
+                batch_results = data.get("results", [])
+                if not batch_results:
+                    break  # No more results
+                
+                # Filter for grants that have actually ended
+                current_date = datetime.now()
+                for grant in batch_results:
+                    end_date_str = grant.get('project_end_date')
+                    grant_ended = False
+                    
+                    if end_date_str:
+                        try:
+                            grant_end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                            if grant_end_date < current_date:
+                                grant_ended = True
+                        except:
+                            try:
+                                grant_end_date = datetime.strptime(end_date_str[:10], "%Y-%m-%d")
+                                if grant_end_date < current_date:
+                                    grant_ended = True
+                            except:
+                                continue
+                    
+                    if grant_ended:
+                        all_terminated_grants.append(grant)
+                
+                print(f"Batch {offset//batch_size + 1}: {len(batch_results)} grants, {len([g for g in batch_results if g in all_terminated_grants])} terminated")
+                
+                if len(batch_results) < batch_size:
+                    break  # Last batch
+                    
+            except httpx.RequestError as e:
+                print(f"Error fetching terminated grants batch {offset//batch_size + 1}: {e}")
+                break
+    
+    print(f"Fetched {len(all_terminated_grants)} terminated grants from NIH API")
+    return all_terminated_grants
+
 
 def normalize_institution_name(name: str) -> str:
     """

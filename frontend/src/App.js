@@ -551,7 +551,7 @@ function App() {
           <div className="loading">Loading university details...</div>
         )}
 
-        {institutionDetails && (
+        {institutionDetails && institutionDetails.overview && (
           <div className="details-content">
             {/* Overview Section */}
             <div className="overview-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
@@ -559,27 +559,27 @@ function App() {
               <div className="overview-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
                 <div className="overview-metric">
                   <div className="metric-label">Active Funding</div>
-                  <div className="metric-value">{formatCurrency(institutionDetails.overview.total_active_funding)}</div>
+                  <div className="metric-value">{formatCurrency(institutionDetails.overview?.total_active_funding || 0)}</div>
                 </div>
                 <div className="overview-metric">
                   <div className="metric-label">Terminated Funding</div>
-                  <div className="metric-value">{formatCurrency(institutionDetails.overview.total_terminated_funding)}</div>
+                  <div className="metric-value">{formatCurrency(institutionDetails.overview?.total_terminated_funding || 0)}</div>
                 </div>
                 <div className="overview-metric">
                   <div className="metric-label">Funding Cliff</div>
-                  <div className="metric-value">{institutionDetails.overview.funding_cliff_percentage}%</div>
+                  <div className="metric-value">{institutionDetails.overview?.funding_cliff_percentage || 0}%</div>
                 </div>
                 <div className="overview-metric">
                   <div className="metric-label">Departments Affected</div>
-                  <div className="metric-value">{institutionDetails.overview.total_departments_affected}</div>
+                  <div className="metric-value">{institutionDetails.overview?.total_departments_affected || 0}</div>
                 </div>
                 <div className="overview-metric">
                   <div className="metric-label">PIs Affected</div>
-                  <div className="metric-value">{institutionDetails.overview.total_pis_affected}</div>
+                  <div className="metric-value">{institutionDetails.overview?.total_pis_affected || 0}</div>
                 </div>
                 <div className="overview-metric">
                   <div className="metric-label">Positions at Risk</div>
-                  <div className="metric-value">{institutionDetails.overview.estimated_total_positions_at_risk}</div>
+                  <div className="metric-value">{Math.round(institutionDetails.overview?.estimated_total_positions_at_risk || 0)}</div>
                 </div>
               </div>
             </div>
@@ -588,32 +588,32 @@ function App() {
             <div className="funding-breakdown-section" style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#e8f5e8', borderRadius: '8px' }}>
               <h3>Active Funding by Agency</h3>
               <div className="funding-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
-                {institutionDetails.funding_breakdown.nih_funding > 0 && (
+                {institutionDetails.funding_breakdown?.nih_funding > 0 && (
                   <div className="agency-funding">
                     <strong>NIH:</strong> {formatCurrency(institutionDetails.funding_breakdown.nih_funding)}
                   </div>
                 )}
-                {institutionDetails.funding_breakdown.nsf_funding > 0 && (
+                {institutionDetails.funding_breakdown?.nsf_funding > 0 && (
                   <div className="agency-funding">
                     <strong>NSF:</strong> {formatCurrency(institutionDetails.funding_breakdown.nsf_funding)}
                   </div>
                 )}
-                {institutionDetails.funding_breakdown.dod_funding > 0 && (
+                {institutionDetails.funding_breakdown?.dod_funding > 0 && (
                   <div className="agency-funding">
                     <strong>DoD:</strong> {formatCurrency(institutionDetails.funding_breakdown.dod_funding)}
                   </div>
                 )}
-                {institutionDetails.funding_breakdown.doe_funding > 0 && (
+                {institutionDetails.funding_breakdown?.doe_funding > 0 && (
                   <div className="agency-funding">
                     <strong>DoE:</strong> {formatCurrency(institutionDetails.funding_breakdown.doe_funding)}
                   </div>
                 )}
-                {institutionDetails.funding_breakdown.nasa_funding > 0 && (
+                {institutionDetails.funding_breakdown?.nasa_funding > 0 && (
                   <div className="agency-funding">
                     <strong>NASA:</strong> {formatCurrency(institutionDetails.funding_breakdown.nasa_funding)}
                   </div>
                 )}
-                {institutionDetails.funding_breakdown.other_funding > 0 && (
+                {institutionDetails.funding_breakdown?.other_funding > 0 && (
                   <div className="agency-funding">
                     <strong>Other:</strong> {formatCurrency(institutionDetails.funding_breakdown.other_funding)}
                   </div>
