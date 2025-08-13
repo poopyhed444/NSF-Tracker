@@ -21,7 +21,6 @@ Based on Times methodology:
 
 import json
 import asyncio
-import aiohttp
 import os
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Any, Optional, Tuple
@@ -55,12 +54,10 @@ class EnhancedDelayedFundingTracker:
         self.minimum_award_threshold = 50000  # Focus on significant awards
         
     async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
+        pass
     
     def _is_renewal_eligible_grant(self, grant: Dict[str, Any]) -> bool:
         """
@@ -121,7 +118,8 @@ class EnhancedDelayedFundingTracker:
     async def analyze_renewal_delays(self, 
                                    institution_name: str,
                                    start_date: str = None, 
-                                   end_date: str = None) -> Dict[str, Any]:
+                                   end_date: str = None,
+                                   grants_data: list = None) -> Dict[str, Any]:
         """
         Analyze delayed renewals using Times methodology
         """
@@ -132,16 +130,20 @@ class EnhancedDelayedFundingTracker:
             start_date = start_date_obj.strftime('%Y-%m-%d')
             end_date = end_date_obj.strftime('%Y-%m-%d')
         
-        # Get current active grants for institution
-        try:
-            grants = await fetch_institution_grants(
-                organization=institution_name,
-                active_only=True,
-                max_records_per_source=5000
-            )
-        except Exception as e:
-            print(f"Error fetching grants for {institution_name}: {e}")
-            return {"error": str(e)}
+        # Get current active grants for institution (use provided data or fetch)
+        if grants_data is not None:
+            grants = grants_data
+            print(f"📊 Using provided grants data: {len(grants)} grants")
+        else:
+            try:
+                grants = await fetch_institution_grants(
+                    organization=institution_name,
+                    active_only=True,
+                    max_records_per_source=5000
+                )
+            except Exception as e:
+                print(f"Error fetching grants for {institution_name}: {e}")
+                return {"error": str(e)}
         
         # Analyze for renewal delays
         expected_renewals = []
@@ -265,8 +267,22 @@ class EnhancedDelayedFundingTracker:
         except Exception as e:
             print(f"Enhanced cache check error: {e}")
         
-        # 1. Renewal delay analysis (Times method)
-        renewal_analysis = await self.analyze_renewal_delays(institution_name)
+        # Fetch grants data once for both analyses
+        print("🔍 Fetching grants data for comprehensive analysis...")
+        try:
+            from .federal_agency_integrator import fetch_institution_grants
+            fresh_grants = await fetch_institution_grants(
+                organization=institution_name,
+                active_only=True,
+                max_records_per_source=5000
+            )
+            print(f"📊 Fetched {len(fresh_grants)} grants for comprehensive analysis")
+        except Exception as e:
+            print(f"Error fetching grants for {institution_name}: {e}")
+            fresh_grants = []
+        
+        # 1. Renewal delay analysis (Times method) - pass grants to avoid refetching
+        renewal_analysis = await self.analyze_renewal_delays(institution_name, grants_data=fresh_grants)
         
         # 2. Disbursement delay analysis (existing method)
         disbursement_tracker = DelayedFundingTracker()
@@ -306,6 +322,62 @@ class EnhancedDelayedFundingTracker:
         disbursement_at_risk = disbursement_analysis.get('summary', {}).get('total_undisbursed', 0)
         total_at_risk = renewal_at_risk + disbursement_at_risk
         
+        # 4. Cancelled grants analysis (fetch terminated grants)
+        print("🔍 Analyzing cancelled grants impact...")
+        try:
+            cancelled_grants_impact = await self._analyze_cancelled_grants(institution_name, pi_cache)
+            print(f"✅ Cancelled grants analysis completed: {cancelled_grants_impact.get('total_affected_pis', 0)} PIs affected")
+        except Exception as e:
+            print(f"❌ Error in cancelled grants analysis: {e}")
+            cancelled_grants_impact = {
+                'total_lost_funding': 0,
+                'grants_cancelled': 0,
+                'departments_affected': 0,
+                'total_affected_pis': 0,
+                'risk_level': 'UNKNOWN',
+                'top_affected_pis': [],
+                'department_losses': {},
+                'error': f'Cancelled grants analysis failed: {str(e)}'
+            }
+        
+        # 5. Non-renewal grants analysis (use fresh grant data)
+        print("🔍 Analyzing non-renewal grants impact...")
+        try:
+            print(f"📊 Using {len(fresh_grants)} fresh grants for non-renewal analysis")
+            
+            if not fresh_grants:
+                print("No fresh grants available for non-renewal analysis, creating stub result")
+                nonrenewal_grants_impact = {
+                    'total_lost_funding': 0,
+                    'grants_eligible_for_renewal': 0,
+                    'missing_renewals_count': 0,
+                    'renewal_rate': 100,  # Assume good if we can't analyze
+                    'risk_level': 'LOW',
+                    'departments_affected': 0,
+                    'pis_impacted': 0,
+                    'top_affected_pis': [],
+                    'department_losses': {},
+                    'methodology_note': 'Non-renewal analysis skipped - no fresh grants available'
+                }
+            else:
+                nonrenewal_grants_impact = await self._analyze_nonrenewal_grants(institution_name, fresh_grants, pi_cache)
+                print(f"✅ Non-renewal analysis completed: {nonrenewal_grants_impact.get('missing_renewals_count', 0)} missing renewals found")
+                
+        except Exception as e:
+            print(f"Error in non-renewal analysis: {e}")
+            nonrenewal_grants_impact = {
+                'total_lost_funding': 0,
+                'grants_eligible_for_renewal': 0,
+                'missing_renewals_count': 0,
+                'renewal_rate': 0,
+                'risk_level': 'UNKNOWN',
+                'departments_affected': 0,
+                'pis_impacted': 0,
+                'top_affected_pis': [],
+                'department_losses': {},
+                'error': str(e)
+            }
+        
         result = {
             'institution': institution_name,
             'analysis_date': datetime.now().isoformat(),
@@ -319,6 +391,8 @@ class EnhancedDelayedFundingTracker:
             # Detailed breakdowns
             'renewal_analysis': renewal_analysis,
             'disbursement_analysis': disbursement_analysis,
+            'cancelled_grants_impact': cancelled_grants_impact,
+            'nonrenewal_grants_impact': nonrenewal_grants_impact,
             
             # Key insights
             'agencies_with_delays': agencies_with_delays,
@@ -393,6 +467,295 @@ class EnhancedDelayedFundingTracker:
             ])
         
         return actions
+    
+    async def _analyze_nonrenewal_grants(self, institution_name: str, active_grants: list, pi_cache: Dict[str, Any] = None) -> dict:
+        """
+        Analyze non-renewal grants using Times-style methodology.
+        Identifies grants that should have been renewed but show no evidence of renewal.
+        """
+        try:
+            print(f"🔍 Analyzing non-renewal grants for {institution_name}")
+            print(f"🚨 DEBUG: Method started successfully, active_grants type: {type(active_grants)}, length: {len(active_grants)}")
+            
+            from datetime import datetime, timedelta
+            print(f"🚨 DEBUG: Imported datetime successfully")
+            
+            # Analysis period: last 24 months for renewal eligibility
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=730)  # Extended to 2 years
+            print(f"🚨 DEBUG: Date calculations completed")
+            
+            print(f"📊 Non-renewal analysis period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+            print(f"📋 Total active grants to analyze: {len(active_grants)}")
+            
+            # Find grants eligible for renewal that haven't been renewed
+            renewal_eligible_grants = []
+            missing_renewals = []
+            nonrenewal_dept_losses = {}
+            nonrenewal_grants_by_pi = {}
+            
+            print(f"🔄 Starting loop through {len(active_grants)} grants...")
+            
+            for grant in active_grants:
+                # Check if grant is eligible for renewal
+                if self._is_renewal_eligible_grant(grant):
+                    expected_renewal_date = self._calculate_expected_renewal_date(grant)
+                    
+                    if expected_renewal_date and expected_renewal_date < datetime.now() - timedelta(days=90):  # 90-day grace period
+                        pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
+                        amount = float(grant.get('award_amount', 0) or 0)
+                        
+                        # Check for renewal evidence
+                        renewal_found = await self._check_for_renewal_evidence(grant, active_grants)
+                        
+                        renewal_info = {
+                            'grant': grant,
+                            'pi_name': pi_name,
+                            'expected_renewal_date': expected_renewal_date.isoformat(),
+                            'award_amount': amount,
+                            'days_overdue': (datetime.now() - expected_renewal_date).days,
+                            'renewal_found': renewal_found,
+                            'project_title': grant.get('project_title', ''),
+                            'project_num': grant.get('project_num') or grant.get('award_id'),
+                            'funding_agency': grant.get('funding_agency', 'Unknown')
+                        }
+                        
+                        renewal_eligible_grants.append(renewal_info)
+                        
+                        if not renewal_found:
+                            missing_renewals.append(renewal_info)
+                            
+                            # Department-level tracking
+                            try:
+                                from pi_department_lookup import get_pi_department
+                                dept_result = await get_pi_department(pi_name, institution_name)
+                                dept = dept_result.get('department', 'Unknown Department')
+                            except:
+                                # Fallback to grant organization data
+                                org_info = grant.get('organization', {})
+                                if isinstance(org_info, dict):
+                                    dept = org_info.get('dept_type', 'Unknown Department')
+                                elif isinstance(org_info, list) and org_info:
+                                    dept = org_info[0].get('dept_type', 'Unknown Department')
+                                else:
+                                    dept = 'Unknown Department'
+                            
+                            nonrenewal_dept_losses[dept] = nonrenewal_dept_losses.get(dept, 0) + amount
+                            
+                            # PI-level tracking
+                            if pi_name not in nonrenewal_grants_by_pi:
+                                nonrenewal_grants_by_pi[pi_name] = {
+                                    'pi_name': pi_name,
+                                    'department': dept,
+                                    'lost_funding': 0,
+                                    'grants': []
+                                }
+                            
+                            nonrenewal_grants_by_pi[pi_name]['lost_funding'] += amount
+                            nonrenewal_grants_by_pi[pi_name]['grants'].append({
+                                'award_id': grant.get('project_num') or grant.get('award_id'),
+                                'project_title': grant.get('project_title', ''),
+                                'amount': amount,
+                                'expected_renewal': expected_renewal_date.isoformat(),
+                                'days_overdue': (datetime.now() - expected_renewal_date).days,
+                                'funding_agency': grant.get('funding_agency', 'Unknown')
+                            })
+            
+            # Calculate metrics
+            print(f"📈 Calculating metrics for {len(missing_renewals)} missing renewals out of {len(renewal_eligible_grants)} eligible grants...")
+            
+            total_at_risk_funding = sum(r['award_amount'] for r in missing_renewals)
+            renewal_rate = 0
+            if renewal_eligible_grants:
+                renewed_count = len([r for r in renewal_eligible_grants if r['renewal_found']])
+                renewal_rate = (renewed_count / len(renewal_eligible_grants)) * 100
+            
+            top_affected_pis = sorted(nonrenewal_grants_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)[:10]
+            
+            risk_level = "LOW"
+            if len(missing_renewals) > 5 or total_at_risk_funding > 10000000:
+                risk_level = "HIGH"
+            elif len(missing_renewals) > 2 or total_at_risk_funding > 5000000:
+                risk_level = "MEDIUM"
+            
+            print(f"✅ Non-renewal analysis complete for {institution_name}: {len(missing_renewals)} missing renewals, ${total_at_risk_funding:,.0f} at risk, {renewal_rate:.1f}% renewal rate, {risk_level} risk")
+            
+            return {
+                'total_lost_funding': total_at_risk_funding,
+                'grants_eligible_for_renewal': len(renewal_eligible_grants),
+                'missing_renewals_count': len(missing_renewals),
+                'renewal_rate': renewal_rate,
+                'risk_level': risk_level,
+                'departments_affected': len(nonrenewal_dept_losses),
+                'pis_impacted': len(nonrenewal_grants_by_pi),
+                'top_affected_pis': [
+                    {
+                        'pi_name': pi['pi_name'],
+                        'department': pi['department'],
+                        'lost_funding': pi['lost_funding'],
+                        'grants_count': len(pi['grants'])
+                    } for pi in top_affected_pis
+                ],
+                'department_losses': dict(sorted(nonrenewal_dept_losses.items(), key=lambda x: x[1], reverse=True)),
+                'detailed_missing_renewals': missing_renewals[:10],  # Top 10 for review
+                'analysis_period': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+                'methodology_note': 'Times-style non-renewal analysis: identifies grants eligible for renewal that show no evidence of renewal within expected timeframes'
+            }
+            
+        except Exception as e:
+            print(f"Error in non-renewal analysis: {e}")
+            return {
+                'total_lost_funding': 0,
+                'grants_eligible_for_renewal': 0,
+                'missing_renewals_count': 0,
+                'renewal_rate': 0,
+                'risk_level': 'UNKNOWN',
+                'departments_affected': 0,
+                'pis_impacted': 0,
+                'top_affected_pis': [],
+                'department_losses': {},
+                'detailed_missing_renewals': [],
+                'analysis_period': '',
+                'methodology_note': 'Non-renewal analysis failed',
+                'error': str(e)
+            }
+
+    async def _analyze_cancelled_grants(self, institution_name: str, pi_cache: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Analyze cancelled/terminated grants impact"""
+        try:
+            # Import helper function
+            from pi_department_lookup import get_department_string
+            from datetime import datetime, timedelta
+            
+            # Fetch terminated grants from NIH using end date criteria (like the old implementation)
+            terminated_grants = []
+            
+            # Use httpx instead of aiohttp (like the working implementation)
+            import httpx
+            
+            # NIH terminated grants search using project end date  
+            nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+            
+            # Use end date criteria instead of award status
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)  # Last year
+            
+            payload = {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    }
+                },
+                "include_fields": [
+                    "ProjectNum", "Organization", "ContactPiName", "AwardAmount", 
+                    "ProjectStartDate", "ProjectEndDate", "ProjectTitle", "FiscalYear"
+                ],
+                "offset": 0,
+                "limit": 2000
+            }
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(nih_url, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    terminated_grants.extend(data.get("results", []))
+                    print(f"Fetched {len(terminated_grants)} recently ended grants from NIH")
+            except httpx.RequestError as e:
+                print(f"Error fetching terminated grants (request): {e}")
+            except httpx.HTTPStatusError as e:
+                print(f"Error fetching terminated grants (HTTP): {e}")
+            except Exception as e:
+                print(f"Error fetching terminated grants (general): {e}")
+            
+            # Process terminated grants by department
+            cancelled_dept_losses = {}
+            cancelled_grants_by_pi = {}
+            total_cancelled_funding = 0
+            
+            # Institution matching keywords
+            institution_upper = institution_name.upper()
+            institution_keywords = institution_upper.split()
+            
+            for grant in terminated_grants:
+                # Check if grant belongs to target institution
+                grant_org = grant.get('organization', {})
+                if isinstance(grant_org, dict):
+                    org_name = grant_org.get('org_name', '').upper()
+                else:
+                    org_name = ''
+                
+                # Check if any major keywords from institution name appear in org name
+                is_institution_match = any(keyword in org_name for keyword in institution_keywords if len(keyword) > 3)
+                
+                if is_institution_match:
+                    pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
+                    if pi_name:
+                        # Use department lookup function if available
+                        if pi_cache:
+                            dept = get_department_string(pi_name, institution_name)
+                        else:
+                            dept = "Unknown Department"
+                        
+                        amount = float(grant.get('award_amount', 0) or 0)
+                        total_cancelled_funding += amount
+                        
+                        # Track department losses
+                        cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
+                        
+                        # Track PI-level losses
+                        if pi_name not in cancelled_grants_by_pi:
+                            cancelled_grants_by_pi[pi_name] = {
+                                'pi_name': pi_name,
+                                'department': dept,
+                                'lost_funding': 0,
+                                'grants': []
+                            }
+                        
+                        cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
+                        cancelled_grants_by_pi[pi_name]['grants'].append({
+                            'award_id': grant.get('project_num') or grant.get('award_id'),
+                            'project_title': grant.get('project_title', ''),
+                            'amount': amount,
+                            'status': 'Recently Ended',
+                            'end_date': grant.get('project_end_date'),
+                            'funding_agency': grant.get('funding_agency', 'NIH')
+                        })
+            
+            # Get top affected PIs
+            top_cancelled_pis = sorted(
+                cancelled_grants_by_pi.values(), 
+                key=lambda x: x['lost_funding'], 
+                reverse=True
+            )[:10]
+            
+            return {
+                'total_lost_funding': total_cancelled_funding,
+                'departments_affected': len(cancelled_dept_losses),
+                'total_affected_pis': len(cancelled_grants_by_pi),
+                'top_affected_pis': [
+                    {
+                        'pi_name': pi['pi_name'],
+                        'department': pi['department'],
+                        'lost_funding': pi['lost_funding'],
+                        'grants_count': len(pi['grants'])
+                    } for pi in top_cancelled_pis
+                ],
+                'department_losses': dict(sorted(cancelled_dept_losses.items(), key=lambda x: x[1], reverse=True)),
+                'methodology_note': 'Analysis based on NIH grants that ended in the last 12 months'
+            }
+            
+        except Exception as e:
+            print(f"Error in cancelled grants analysis: {e}")
+            return {
+                'total_lost_funding': 0,
+                'departments_affected': 0,
+                'total_affected_pis': 0,
+                'top_affected_pis': [],
+                'department_losses': {},
+                'error': str(e)
+            }
     
     async def analyze_delays_by_department(self, 
                                          institution_name: str,

@@ -42,10 +42,43 @@ function App() {
         axios.get(`/api/delayed-funding/${encodeURIComponent(institutionName)}`)
       ]);
       
+      // Map the delayed funding response to the expected structure
+      const delayedFundingData = delayedFundingResponse.data;
+      const mappedDelayedFunding = {
+        undisbursed_amount: delayedFundingData.disbursement_analysis?.summary?.total_undisbursed || 0,
+        disbursement_efficiency: delayedFundingData.disbursement_analysis?.summary?.disbursement_efficiency || 'N/A',
+        delayed_awards_count: delayedFundingData.disbursement_analysis?.summary?.awards_with_significant_delays || 0,
+        cash_flow_risk: {
+          level: delayedFundingData.overall_risk_level || 'UNKNOWN'
+        },
+        note: delayedFundingData.disbursement_analysis?.summary?.total_undisbursed === 0 ? 
+              "No cancelled grants found for this institution, or department information not available." : null,
+        // Map cancelled grants data from delayed funding response and fix field mapping
+        cancelled_grants_impact: delayedFundingData.cancelled_grants_impact ? {
+          ...delayedFundingData.cancelled_grants_impact,
+          // Map top_affected_pis to top_pis for frontend compatibility
+          top_pis: delayedFundingData.cancelled_grants_impact.top_affected_pis || []
+        } : null,
+        // Map non-renewal grants data from delayed funding response and fix field mapping
+        nonrenewal_grants_impact: delayedFundingData.nonrenewal_grants_impact ? {
+          ...delayedFundingData.nonrenewal_grants_impact,
+          // Map top_affected_pis to top_pis for frontend compatibility
+          top_pis: delayedFundingData.nonrenewal_grants_impact.top_affected_pis || []
+        } : null
+      };
+      
       // Merge the delayed funding data into institution details
       const mergedData = {
         ...detailsResponse.data,
-        delayed_funding: delayedFundingResponse.data
+        delayed_funding: mappedDelayedFunding,
+        // Add departments from cancelled grants analysis for the departments section
+        departments: mappedDelayedFunding.cancelled_grants_impact?.department_losses ? 
+          Object.entries(mappedDelayedFunding.cancelled_grants_impact.department_losses).map(([dept, amount]) => ({
+            department: dept,
+            total_terminated_funding: amount,
+            grants_count: 0, // Will be populated if we have more detailed data
+            unique_pis: 0    // Will be populated if we have more detailed data
+          })) : []
       };
       
       setInstitutionDetails(mergedData);

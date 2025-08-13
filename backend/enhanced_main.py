@@ -168,6 +168,352 @@ async def fetch_additional_terminated_grants(institution_name: str) -> List[Dict
         print(f"❌ Failed to fetch comprehensive terminated grants: {e}")
         return []
 
+async def fetch_comprehensive_institution_grants(institution_name: str, max_grants: int = 10000) -> List[Dict[str, Any]]:
+    """
+    Fetch comprehensive grants for an institution using multiple API strategies
+    """
+    try:
+        import httpx
+        from datetime import datetime, timedelta
+        
+        print(f"🔍 Fetching comprehensive grants for {institution_name} (up to {max_grants} grants)...")
+        
+        all_grants = []
+        
+        # NIH API - Multiple search strategies
+        nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+        
+        # Create institution name variations for better matching
+        institution_variations = [
+            institution_name,
+            institution_name.upper(),
+            institution_name.replace("University of", "").strip(),
+            institution_name.replace("University", "Univ").strip(),
+            institution_name.replace(",", "").strip()
+        ]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_variations = []
+        for var in institution_variations:
+            if var.lower() not in seen and var.strip():
+                seen.add(var.lower())
+                unique_variations.append(var)
+        
+        print(f"🔍 Searching with institution variations: {unique_variations}")
+        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            # NIH search strategies
+            nih_strategies = [
+                # Strategy 1: Recent grants (last 5 years, all statuses)
+                {
+                    "criteria": {
+                        "organization_names": unique_variations,
+                        "fiscal_years": [2020, 2021, 2022, 2023, 2024, 2025]
+                    },
+                    "include_fields": [
+                        "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                        "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
+                        "ActivityCode", "FullStudySection"
+                    ],
+                    "limit": 500
+                },
+                # Strategy 2: Broader time range with higher amounts
+                {
+                    "criteria": {
+                        "organization_names": unique_variations,
+                        "award_amount_low": 100000,  # Focus on substantial grants
+                        "fiscal_years": [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+                    },
+                    "include_fields": [
+                        "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                        "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
+                        "ActivityCode", "FullStudySection"
+                    ],
+                    "limit": 500
+                },
+                # Strategy 3: Search by DUNS/UEI if available
+                {
+                    "criteria": {
+                        "organization_names": unique_variations,
+                        "project_types": ["RESEARCH", "TRAINING", "CAREER", "OTHER_RESEARCH"],
+                        "fiscal_years": [2019, 2020, 2021, 2022, 2023, 2024, 2025]
+                    },
+                    "include_fields": [
+                        "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                        "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
+                        "ActivityCode", "FullStudySection"
+                    ],
+                    "limit": 500
+                }
+            ]
+            
+            for strategy_num, search_criteria in enumerate(nih_strategies, 1):
+                try:
+                    print(f"📋 NIH Strategy {strategy_num}: Searching...")
+                    
+                    # Paginate through results
+                    offset = 0
+                    batch_size = 500
+                    strategy_grants = []
+                    
+                    while len(strategy_grants) < 2000:  # Max 2000 per strategy
+                        search_criteria["offset"] = offset
+                        search_criteria["limit"] = batch_size
+                        
+                        response = await client.post(nih_url, json=search_criteria)
+                        response.raise_for_status()
+                        data = response.json()
+                        
+                        results = data.get("results", [])
+                        if not results:
+                            break
+                        
+                        # Process and standardize grants
+                        for grant in results:
+                            processed_grant = {
+                                'fiscal_year': grant.get('fiscal_year'),
+                                'project_num': grant.get('project_num'),
+                                'organization': grant.get('organization', {}),
+                                'activity_code': grant.get('activity_code'),
+                                'award_amount': grant.get('award_amount', 0),
+                                'contact_pi_name': grant.get('contact_pi_name'),
+                                'project_start_date': grant.get('project_start_date'),
+                                'project_end_date': grant.get('project_end_date'),
+                                'full_study_section': grant.get('full_study_section', {}),
+                                'award_notice_date': grant.get('award_notice_date'),
+                                'project_title': grant.get('project_title'),
+                                'funding_agency': 'NIH',
+                                'source': f'NIH_comprehensive_strategy_{strategy_num}'
+                            }
+                            strategy_grants.append(processed_grant)
+                        
+                        print(f"  📥 Batch {offset//batch_size + 1}: +{len(results)} grants (total: {len(strategy_grants)})")
+                        offset += batch_size
+                        
+                        if len(results) < batch_size:
+                            break
+                    
+                    all_grants.extend(strategy_grants)
+                    print(f"✅ NIH Strategy {strategy_num}: Found {len(strategy_grants)} grants")
+                    
+                except Exception as e:
+                    print(f"⚠️ NIH Strategy {strategy_num} failed: {e}")
+                    continue
+            
+            # NSF API search
+            print("🧪 Fetching NSF grants...")
+            nsf_url = "https://api.nsf.gov/services/v1/awards.json"
+            
+            try:
+                nsf_params = {
+                    'printFields': 'id,title,startDate,expDate,fundsObligatedAmt,awardeeName,pdPIName,agency,fundProgramName',
+                    'rpp': '500',
+                    'awardeeName': institution_name
+                }
+                
+                # Paginate through NSF results
+                offset = 1
+                nsf_grants = []
+                
+                while len(nsf_grants) < 2000:  # Max 2000 NSF grants
+                    nsf_params['offset'] = str(offset)
+                    
+                    response = await client.get(nsf_url, params=nsf_params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    awards = data.get('response', {}).get('award', [])
+                    if not awards:
+                        break
+                    
+                    # Process NSF grants
+                    for award in awards:
+                        processed_grant = {
+                            'fiscal_year': None,  # NSF doesn't use fiscal years the same way
+                            'project_num': award.get('id'),
+                            'organization': {
+                                'org_name': award.get('awardeeName'),
+                                'org_state': award.get('awardeeStateCode'),
+                                'org_city': award.get('awardeeCity')
+                            },
+                            'activity_code': 'NSF',
+                            'award_amount': award.get('fundsObligatedAmt', 0),
+                            'contact_pi_name': award.get('pdPIName'),
+                            'project_start_date': award.get('startDate'),
+                            'project_end_date': award.get('expDate'),
+                            'project_title': award.get('title'),
+                            'funding_agency': 'NSF',
+                            'source': 'NSF_comprehensive_search'
+                        }
+                        nsf_grants.append(processed_grant)
+                    
+                    print(f"  📥 NSF Batch {offset//500 + 1}: +{len(awards)} grants (total: {len(nsf_grants)})")
+                    offset += 500
+                    
+                    if len(awards) < 500:
+                        break
+                
+                all_grants.extend(nsf_grants)
+                print(f"✅ NSF: Found {len(nsf_grants)} grants")
+                
+            except Exception as e:
+                print(f"⚠️ NSF search failed: {e}")
+        
+        # Remove duplicates based on project_num/id
+        seen_projects = set()
+        unique_grants = []
+        for grant in all_grants:
+            project_num = grant.get('project_num')
+            if project_num and project_num not in seen_projects:
+                seen_projects.add(project_num)
+                unique_grants.append(grant)
+            elif not project_num:
+                # Include grants without project numbers (shouldn't happen but just in case)
+                unique_grants.append(grant)
+        
+        print(f"🎯 Total unique grants found: {len(unique_grants)} (from {len(all_grants)} total)")
+        return unique_grants[:max_grants]  # Limit to max_grants
+        
+    except Exception as e:
+        print(f"❌ Failed to fetch comprehensive institution grants: {e}")
+        return []
+
+async def fetch_additional_terminated_grants(institution_name: str) -> List[Dict[str, Any]]:
+    """
+    Fetch comprehensive terminated/cancelled grants for better department analysis
+    """
+    try:
+        import httpx
+        from datetime import datetime, timedelta
+        
+        print(f"🔍 Fetching comprehensive terminated grants for {institution_name}...")
+        
+        # NIH API for terminated grants
+        nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+        
+        # Search for grants in the last 5 years that have ended
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=1825)  # 5 years
+        
+        all_terminated_grants = []
+        
+        # Multiple search strategies to catch different types of terminated grants
+        search_strategies = [
+            # Strategy 1: Recently ended grants
+            {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    },
+                    "organization_names": [institution_name],
+                    "award_notice_date": {
+                        "from_date": "2019-01-01",
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    }
+                },
+                "include_fields": [
+                    "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                    "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate"
+                ],
+                "offset": 0,
+                "limit": 500
+            },
+            # Strategy 2: Search by institution variations
+            {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    },
+                    "organization_names": [
+                        institution_name,
+                        institution_name.replace("University", "Univ"),
+                        institution_name.replace("University of", ""),
+                        institution_name.split()[0] if " " in institution_name else institution_name
+                    ]
+                },
+                "include_fields": [
+                    "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                    "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate"
+                ],
+                "offset": 0,
+                "limit": 500
+            }
+        ]
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for strategy_num, search_criteria in enumerate(search_strategies, 1):
+                try:
+                    print(f"📋 Trying search strategy {strategy_num}...")
+                    response = await client.post(nih_url, json=search_criteria)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    strategy_results = []
+                    
+                    # Process grants and filter for truly terminated ones
+                    for grant in data.get("results", []):
+                        # Check if grant has actually ended (not just scheduled to end)
+                        end_date_str = grant.get('project_end_date')
+                        current_date = datetime.now()
+                        
+                        grant_ended = False
+                        if end_date_str:
+                            try:
+                                grant_end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                                if grant_end_date < current_date:
+                                    grant_ended = True
+                            except:
+                                # Try alternative date format
+                                try:
+                                    grant_end_date = datetime.strptime(end_date_str[:10], "%Y-%m-%d")
+                                    if grant_end_date < current_date:
+                                        grant_ended = True
+                                except:
+                                    continue
+                        
+                        if grant_ended:
+                            # Add standardized fields to match cache format
+                            processed_grant = {
+                                'fiscal_year': grant.get('fiscal_year'),
+                                'project_num': grant.get('project_num'),
+                                'organization': grant.get('organization', {}),
+                                'award_amount': grant.get('award_amount', 0),
+                                'contact_pi_name': grant.get('contact_pi_name'),
+                                'project_start_date': grant.get('project_start_date'),
+                                'project_end_date': grant.get('project_end_date'),
+                                'project_title': grant.get('project_title'),
+                                'funding_agency': 'NIH',
+                                'award_status': 'terminated',  # These are all ended grants
+                                'source': f'terminated_search_strategy_{strategy_num}'
+                            }
+                            strategy_results.append(processed_grant)
+                    
+                    print(f"✅ Strategy {strategy_num}: Found {len(strategy_results)} terminated grants")
+                    all_terminated_grants.extend(strategy_results)
+                    
+                except Exception as e:
+                    print(f"⚠️ Strategy {strategy_num} failed: {e}")
+                    continue
+        
+        # Remove duplicates based on project_num
+        seen_projects = set()
+        unique_terminated_grants = []
+        for grant in all_terminated_grants:
+            project_num = grant.get('project_num')
+            if project_num and project_num not in seen_projects:
+                seen_projects.add(project_num)
+                unique_terminated_grants.append(grant)
+        
+        print(f"✅ Total unique terminated grants found: {len(unique_terminated_grants)}")
+        return unique_terminated_grants
+        
+    except Exception as e:
+        print(f"❌ Failed to fetch comprehensive terminated grants: {e}")
+        return []
+
 async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) -> dict:
     """
     Analyze non-renewal grants using Times-style methodology.
@@ -182,9 +528,9 @@ async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) 
         # Initialize tracker
         tracker = EnhancedDelayedFundingTracker()
         
-        # Analysis period: last 12 months for renewal eligibility
+        # Analysis period: last 24 months for renewal eligibility (extended for better detection)
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
+        start_date = end_date - timedelta(days=730)  # Extended to 2 years
         
         # Find grants eligible for renewal that haven't been renewed
         renewal_eligible_grants = []
@@ -395,32 +741,47 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                 
                 # Process terminated grants by department for cancelled grants analysis
                 for grant in terminated_grants:
-                    pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
-                    if pi_name:
-                        dept = get_department_string(pi_name, institution_name)
-                        amount = float(grant.get('award_amount', 0) or 0)
-                        
-                        # Track department losses
-                        cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
-                        
-                        # Track PI-level losses
-                        if pi_name not in cancelled_grants_by_pi:
-                            cancelled_grants_by_pi[pi_name] = {
-                                'pi_name': pi_name,
-                                'department': dept,
-                                'lost_funding': 0,
-                                'grants': []
-                            }
-                        
-                        cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
-                        cancelled_grants_by_pi[pi_name]['grants'].append({
-                            'award_id': grant.get('project_num') or grant.get('award_id'),
-                            'project_title': grant.get('project_title', ''),
-                            'amount': amount,
-                            'status': grant.get('award_status', 'Unknown'),
-                            'end_date': grant.get('project_end_date'),
-                            'funding_agency': grant.get('funding_agency', 'Unknown')
-                        })
+                    # Check if grant belongs to target institution
+                    grant_org = grant.get('organization', {})
+                    if isinstance(grant_org, dict):
+                        org_name = grant_org.get('org_name', '').upper()
+                    else:
+                        org_name = ''
+                    
+                    # Simple institution matching - check if institution name appears in org name
+                    institution_upper = institution_name.upper()
+                    institution_keywords = institution_upper.split()
+                    
+                    # Check if any major keywords from institution name appear in org name
+                    is_institution_match = any(keyword in org_name for keyword in institution_keywords if len(keyword) > 3)
+                    
+                    if is_institution_match:
+                        pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
+                        if pi_name:
+                            dept = get_department_string(pi_name, institution_name)
+                            amount = float(grant.get('award_amount', 0) or 0)
+                            
+                            # Track department losses
+                            cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
+                            
+                            # Track PI-level losses
+                            if pi_name not in cancelled_grants_by_pi:
+                                cancelled_grants_by_pi[pi_name] = {
+                                    'pi_name': pi_name,
+                                    'department': dept,
+                                    'lost_funding': 0,
+                                    'grants': []
+                                }
+                            
+                            cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
+                            cancelled_grants_by_pi[pi_name]['grants'].append({
+                                'award_id': grant.get('project_num') or grant.get('award_id'),
+                                'project_title': grant.get('project_title', ''),
+                                'amount': amount,
+                                'status': grant.get('award_status', 'Unknown'),
+                                'end_date': grant.get('project_end_date'),
+                                'funding_agency': grant.get('funding_agency', 'Unknown')
+                            })
                         
             except Exception:
                 # Fallback to simple department detection
@@ -946,7 +1307,7 @@ def match_pi_to_department(pi_name: str, institution: str, pi_cache: dict) -> st
 
 @app.get("/api/university-details/{institution_name}")
 async def get_university_details(institution_name: str):
-    """Get detailed information about a university using fresh NIH/NSF data with USASpending fallback"""
+    """Get detailed information about a university using comprehensive multi-source data fetching"""
     try:
         print(f"Fetching comprehensive details for: {institution_name}")
         
@@ -962,7 +1323,7 @@ async def get_university_details(institution_name: str):
         # Normalize the institution name
         normalized_institution = normalize_institution_name(institution_name)
         
-        # First priority: Use fresh NIH/NSF cache data
+        # Strategy 1: Use fresh NIH/NSF cache data
         print("🎯 Using fresh NIH/NSF grant data...")
         combined_grants = get_combined_cache()
         
@@ -1003,89 +1364,136 @@ async def get_university_details(institution_name: str):
                         if award_status in ['terminated', 'cancelled', 'expired']:
                             institution_terminated_grants.append(grant)
                         else:
-                            # For NIH/NSF, consider as active if not explicitly terminated
                             institution_active_grants.append(grant)
                             
                 except Exception as e:
                     print(f"⚠️ Error processing grant: {e}")
                     continue
         
-        # If no active grants found in NIH/NSF data, supplement with USASpending
-        if len(institution_active_grants) == 0:
-            print("⚡ Supplementing with USASpending.gov data...")
-            from layoff_estimator import fetch_total_funding_grants
-            usaspending_grants = await fetch_total_funding_grants(active_only=True)
-            
-            for grant in usaspending_grants:
+        # Strategy 2: Direct comprehensive API fetch for this specific institution
+        print(f"🔍 Fetching comprehensive grants directly for {institution_name}...")
+        try:
+            fresh_institution_grants = await fetch_comprehensive_institution_grants(institution_name, max_grants=15000)
+            if fresh_institution_grants:
+                print(f"✅ Found {len(fresh_institution_grants)} additional grants from direct API fetch")
+                
+                # Add to our collections
+                for grant in fresh_institution_grants:
+                    try:
+                        status = grant.get('project_end_date', '')
+                        award_status = grant.get('award_status', '').lower()
+                        
+                        # Check if we already have this grant
+                        project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                        existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_active_grants + institution_terminated_grants]
+                        
+                        if project_num not in existing_nums:
+                            if award_status in ['terminated', 'cancelled', 'expired']:
+                                institution_terminated_grants.append(grant)
+                            else:
+                                institution_active_grants.append(grant)
+                    except Exception as e:
+                        print(f"⚠️ Error processing fresh grant: {e}")
+                        continue
+        except Exception as e:
+            print(f"⚠️ Direct comprehensive API fetch failed: {e}")
+        
+        # Strategy 3: Enhanced terminated grants fetch
+        print("🔍 Fetching comprehensive terminated grants...")
+        try:
+            enhanced_terminated = await fetch_additional_terminated_grants(institution_name)
+            if enhanced_terminated:
+                print(f"📋 Adding {len(enhanced_terminated)} additional terminated grants")
+                # Remove duplicates
+                existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_terminated_grants]
+                for grant in enhanced_terminated:
+                    project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                    if project_num not in existing_nums:
+                        institution_terminated_grants.append(grant)
+        except Exception as e:
+            print(f"⚠️ Enhanced terminated grants fetch failed: {e}")
+        
+        # Strategy 4: Legacy terminated grants for broader coverage
+        print("🔍 Fetching legacy terminated grants...")
+        try:
+            legacy_terminated_grants = await fetch_terminated_grants()
+            for grant in legacy_terminated_grants:
                 try:
                     org_info = grant.get('organization', {})
                     org_name = ''
                     
                     if isinstance(org_info, list) and org_info:
-                        # Handle list format
                         first_org = org_info[0]
                         if isinstance(first_org, dict):
                             org_name = first_org.get('org_name', '')
                         elif isinstance(first_org, str):
                             org_name = first_org
                     elif isinstance(org_info, dict):
-                        # Handle dict format
                         org_name = org_info.get('org_name', '')
                     elif isinstance(org_info, str):
-                        # Handle string format
                         org_name = org_info
                     
                     if not org_name:
                         continue
                     
                     if normalize_institution_name(org_name) == normalized_institution:
-                        institution_active_grants.append(grant)
+                        project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                        existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_terminated_grants]
+                        if project_num not in existing_nums:
+                            institution_terminated_grants.append(grant)
                         
                 except Exception as e:
-                    print(f"⚠️ Error processing USASpending grant: {e}")
+                    print(f"⚠️ Error processing legacy terminated grant: {e}")
                     continue
+        except Exception as e:
+            print(f"⚠️ Legacy terminated grants fetch failed: {e}")
         
-        # Get terminated grants from NIH API for research-specific risk analysis
-        terminated_grants = await fetch_terminated_grants()
-        for grant in terminated_grants:
+        # Strategy 5: USASpending fallback if still not enough data
+        if len(institution_active_grants) < 50:
+            print("⚡ Supplementing with USASpending.gov data...")
             try:
-                org_info = grant.get('organization', {})
-                org_name = ''
+                from layoff_estimator import fetch_total_funding_grants
+                usaspending_grants = await fetch_total_funding_grants(active_only=True, max_records_per_source=5000)
                 
-                if isinstance(org_info, list) and org_info:
-                    # Handle list format
-                    first_org = org_info[0]
-                    if isinstance(first_org, dict):
-                        org_name = first_org.get('org_name', '')
-                    elif isinstance(first_org, str):
-                        org_name = first_org
-                elif isinstance(org_info, dict):
-                    # Handle dict format
-                    org_name = org_info.get('org_name', '')
-                elif isinstance(org_info, str):
-                    # Handle string format
-                    org_name = org_info
-                
-                if not org_name:
-                    continue
-                
-                if normalize_institution_name(org_name) == normalized_institution:
-                    institution_terminated_grants.append(grant)
-                    
+                for grant in usaspending_grants:
+                    try:
+                        org_info = grant.get('organization', {})
+                        org_name = ''
+                        
+                        if isinstance(org_info, list) and org_info:
+                            first_org = org_info[0]
+                            if isinstance(first_org, dict):
+                                org_name = first_org.get('org_name', '')
+                            elif isinstance(first_org, str):
+                                org_name = first_org
+                        elif isinstance(org_info, dict):
+                            org_name = org_info.get('org_name', '')
+                        elif isinstance(org_info, str):
+                            org_name = org_info
+                        
+                        if not org_name:
+                            continue
+                        
+                        if normalize_institution_name(org_name) == normalized_institution:
+                            project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                            existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_active_grants]
+                            if project_num not in existing_nums:
+                                institution_active_grants.append(grant)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error processing USASpending grant: {e}")
+                        continue
+                        
+                print(f"✅ Added {len([g for g in usaspending_grants if normalize_institution_name(g.get('organization', {}).get('org_name', '')) == normalized_institution])} USASpending grants")
             except Exception as e:
-                print(f"⚠️ Error processing terminated grant: {e}")
-                continue
+                print(f"⚠️ USASpending supplement failed: {e}")
         
-        # Combine fresh grants with additional terminated grants for comprehensive analysis
+        # Combine all grants for comprehensive analysis
         all_grants_for_institution = institution_active_grants + institution_terminated_grants
         
-        # Fetch additional terminated grants for better department analysis
-        additional_terminated = await fetch_additional_terminated_grants(institution_name)
-        if additional_terminated:
-            print(f"📋 Adding {len(additional_terminated)} additional terminated grants")
-            all_grants_for_institution.extend(additional_terminated)
+        print(f"🎯 Total grants collected: {len(all_grants_for_institution)} ({len(institution_active_grants)} active, {len(institution_terminated_grants)} terminated)")
         
-        # Ensure we have enough grants for meaningful analysis
+        # Ensure we have meaningful data
         if len(all_grants_for_institution) > 0:
             print(f"🎯 Analyzing {len(all_grants_for_institution)} total grants using enhanced fresh data analysis")
             
@@ -1093,14 +1501,14 @@ async def get_university_details(institution_name: str):
             result = await analyze_fresh_nih_nsf_data(institution_name, all_grants_for_institution, pi_cache=None)
             return result
         else:
-            print("⚠️ No grants found in fresh NIH/NSF data, falling back to comprehensive analysis")
+            print("⚠️ No grants found with comprehensive search, falling back to enhanced tracker")
             
-            # Fallback to comprehensive analysis when no fresh data available
+            # Final fallback to comprehensive analysis
             from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
             enhanced_tracker = EnhancedDelayedFundingTracker()
             return await enhanced_tracker.comprehensive_delayed_funding_analysis(
                 institution_name, 
-                force_fresh_analysis=False
+                force_fresh_analysis=True  # Force fresh analysis for better coverage
             )
         
     except Exception as e:
