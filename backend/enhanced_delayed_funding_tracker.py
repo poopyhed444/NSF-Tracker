@@ -27,6 +27,66 @@ from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 import re
 
+def normalize_department_name(dept_name, grant_context=None):
+    """
+    Enhanced department name normalization with NLP analysis.
+    
+    Args:
+        dept_name: Original department name from grant data
+        grant_context: Dict with grant information for NLP analysis (optional)
+                      Should include: project_title, project_abstract, etc.
+    """
+    if not dept_name or dept_name is None:
+        dept_name = "Other"
+    
+    dept_str = str(dept_name).strip()
+    
+    # Handle various representations of null/none/empty/other
+    if dept_str.lower() in ['null', 'none', '', 'unknown department', 'unknown', 'n/a', 'na', 'other']:
+        # Try to use NLP classification if grant context is available
+        if grant_context:
+            try:
+                from scibert_classifier import predict_from_research_context
+                
+                # Extract text for classification
+                title = grant_context.get('project_title', '')
+                abstract = grant_context.get('abstract', grant_context.get('project_abstract', ''))
+                org_name = ''
+                
+                # Extract organization name from grant data
+                org_info = grant_context.get('organization', {})
+                if isinstance(org_info, dict):
+                    org_name = org_info.get('org_name', '')
+                elif isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get('org_name', '') if isinstance(org_info[0], dict) else ''
+                
+                # Use SciBERT to classify based on project content
+                nlp_result = predict_from_research_context(
+                    title=title,
+                    abstract=abstract,
+                    affiliation=org_name,
+                    keywords=[]
+                )
+                
+                classified_dept = nlp_result.get('department', 'Other')
+                confidence = nlp_result.get('confidence', 0)
+                
+                print(f"🧠 SciBERT analysis: '{title[:50]}...' -> {classified_dept} (confidence: {confidence:.2f})")
+                
+                # Use NLP result if it's not "Unknown" and has reasonable confidence
+                if classified_dept and classified_dept != 'Unknown' and confidence > 0.15:  # Lower threshold
+                    print(f"🧠 ✅ Using SciBERT result: {classified_dept} (confidence: {confidence:.2f})")
+                    return classified_dept
+                else:
+                    print(f"⚠️ SciBERT confidence too low ({confidence:.2f}) or returned Unknown, using 'Other'")
+                        
+            except Exception as e:
+                print(f"⚠️ NLP classification failed: {e}")
+        
+        return "Other"
+    
+    return dept_str
+
 # Import existing functionality
 from delayed_funding_tracker import DelayedFundingTracker
 from layoff_estimator import fetch_institution_grants, fetch_total_funding_grants
@@ -208,8 +268,8 @@ class EnhancedDelayedFundingTracker:
         """
         Check if there's evidence of renewal for a grant
         """
-        pi_name = original_grant.get('contact_pi_name', '')
-        project_title = original_grant.get('project_title', '')
+        pi_name = original_grant.get('contact_pi_name', '') or ''
+        project_title = original_grant.get('project_title', '') or ''
         
         if not pi_name:
             return False
@@ -219,58 +279,62 @@ class EnhancedDelayedFundingTracker:
             if grant == original_grant:
                 continue
                 
-            grant_pi = grant.get('contact_pi_name', '')
-            grant_title = grant.get('project_title', '')
+            grant_pi = grant.get('contact_pi_name', '') or ''
+            grant_title = grant.get('project_title', '') or ''
             
-            # Same PI check
-            if pi_name.lower() in grant_pi.lower() or grant_pi.lower() in pi_name.lower():
+            # Same PI check - ensure both are strings
+            if grant_pi and pi_name and (pi_name.lower() in grant_pi.lower() or grant_pi.lower() in pi_name.lower()):
                 # Check for continuation indicators
-                if any(term in grant_title.lower() for term in [
+                if grant_title and any(term in grant_title.lower() for term in [
                     'year 2', 'year 3', 'year 4', 'continuation', 'renewal',
                     'phase ii', 'phase 2', 'continued', 'supplement'
                 ]):
                     return True
                     
                 # Similar title check (basic keyword overlap)
-                original_words = set(project_title.lower().split())
-                grant_words = set(grant_title.lower().split())
-                
-                # Remove common words
-                common_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from'}
-                original_words -= common_words
-                grant_words -= common_words
-                
-                if len(original_words) > 0:
-                    overlap = len(original_words & grant_words) / len(original_words)
-                    if overlap > 0.4:  # 40% keyword overlap
-                        return True
+                if project_title and grant_title:
+                    original_words = set(project_title.lower().split())
+                    grant_words = set(grant_title.lower().split())
+                    
+                    # Remove common words
+                    common_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from'}
+                    original_words -= common_words
+                    grant_words -= common_words
+                    
+                    if len(original_words) > 0:
+                        overlap = len(original_words & grant_words) / len(original_words)
+                        if overlap > 0.4:  # 40% keyword overlap
+                            return True
         
         return False
     
     async def analyze_comprehensive_delays(self, 
                                          institution_name: str,
-                                         pi_cache: Dict[str, Any] = None) -> Dict[str, Any]:
+                                         pi_cache: Dict[str, Any] = None,
+                                         force_refresh: bool = False) -> Dict[str, Any]:
         """
         Comprehensive delay analysis combining Times methodology with disbursement tracking
         """
-        # Check cache first
+        # Check cache first (skip if force_refresh)
         cache_key = f"enhanced_comprehensive_delays_{institution_name}"
-        try:
-            cached_data = get_combined_cache() or []
-            for item in cached_data:
-                if item.get('cache_key') == cache_key:
-                    # Check if cache is still valid (2 hours for enhanced analysis)
-                    cache_time = datetime.fromisoformat(item.get('cached_at', '2000-01-01'))
-                    if (datetime.now() - cache_time).total_seconds() < 7200:  # 2 hours cache
-                        print(f"Using cached enhanced analysis for {institution_name}")
-                        return item.get('data')
-        except Exception as e:
-            print(f"Enhanced cache check error: {e}")
+        if not force_refresh:
+            try:
+                cached_data = get_combined_cache() or []
+                for item in cached_data:
+                    if item.get('cache_key') == cache_key:
+                        # Check if cache is still valid (2 hours for enhanced analysis)
+                        cache_time = datetime.fromisoformat(item.get('cached_at', '2000-01-01'))
+                        if (datetime.now() - cache_time).total_seconds() < 7200:  # 2 hours cache
+                            print(f"Using cached enhanced analysis for {institution_name}")
+                            return item.get('data')
+            except Exception as e:
+                print(f"Enhanced cache check error: {e}")
+        else:
+            print(f"🔄 Force refresh enabled - bypassing cache for {institution_name}")
         
         # Fetch grants data once for both analyses
         print("🔍 Fetching grants data for comprehensive analysis...")
         try:
-            from .federal_agency_integrator import fetch_institution_grants
             fresh_grants = await fetch_institution_grants(
                 organization=institution_name,
                 active_only=True,
@@ -496,17 +560,23 @@ class EnhancedDelayedFundingTracker:
             
             print(f"🔄 Starting loop through {len(active_grants)} grants...")
             
-            for grant in active_grants:
+            for i, grant in enumerate(active_grants):
+                if i % 100 == 0:
+                    print(f"🔄 Processing grant {i}/{len(active_grants)}")
+                
                 # Check if grant is eligible for renewal
                 if self._is_renewal_eligible_grant(grant):
+                    print(f"🎯 Grant {i} is renewal eligible")
                     expected_renewal_date = self._calculate_expected_renewal_date(grant)
                     
                     if expected_renewal_date and expected_renewal_date < datetime.now() - timedelta(days=90):  # 90-day grace period
                         pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
                         amount = float(grant.get('award_amount', 0) or 0)
                         
-                        # Check for renewal evidence
-                        renewal_found = await self._check_for_renewal_evidence(grant, active_grants)
+                        print(f"✅ Found eligible grant from {pi_name}, amount: ${amount:,.0f}")
+                        
+                        # Check for renewal evidence (simplified without async issues)
+                        renewal_found = self._check_for_renewal_evidence_sync(grant, active_grants)
                         
                         renewal_info = {
                             'grant': grant,
@@ -523,22 +593,22 @@ class EnhancedDelayedFundingTracker:
                         renewal_eligible_grants.append(renewal_info)
                         
                         if not renewal_found:
+                            print(f"⚠️ No renewal found for {pi_name}")
                             missing_renewals.append(renewal_info)
                             
-                            # Department-level tracking
+                            # Department-level tracking (simplified without async lookup)
+                            dept = 'Other'
                             try:
-                                from pi_department_lookup import get_pi_department
-                                dept_result = await get_pi_department(pi_name, institution_name)
-                                dept = dept_result.get('department', 'Unknown Department')
-                            except:
-                                # Fallback to grant organization data
                                 org_info = grant.get('organization', {})
                                 if isinstance(org_info, dict):
-                                    dept = org_info.get('dept_type', 'Unknown Department')
+                                    dept = org_info.get('dept_type', 'Other')
                                 elif isinstance(org_info, list) and org_info:
-                                    dept = org_info[0].get('dept_type', 'Unknown Department')
-                                else:
-                                    dept = 'Unknown Department'
+                                    dept = org_info[0].get('dept_type', 'Other')
+                            except:
+                                pass
+                            
+                            # Normalize department name with NLP analysis if needed
+                            dept = normalize_department_name(dept, grant)
                             
                             nonrenewal_dept_losses[dept] = nonrenewal_dept_losses.get(dept, 0) + amount
                             
@@ -603,7 +673,9 @@ class EnhancedDelayedFundingTracker:
             }
             
         except Exception as e:
-            print(f"Error in non-renewal analysis: {e}")
+            print(f"❌ Error in non-renewal analysis: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'total_lost_funding': 0,
                 'grants_eligible_for_renewal': 0,
@@ -619,6 +691,50 @@ class EnhancedDelayedFundingTracker:
                 'methodology_note': 'Non-renewal analysis failed',
                 'error': str(e)
             }
+
+    def _check_for_renewal_evidence_sync(self, original_grant: Dict[str, Any], all_grants: List[Dict[str, Any]]) -> bool:
+        """
+        Synchronous version of renewal evidence check to avoid async issues
+        """
+        pi_name = original_grant.get('contact_pi_name', '') or ''
+        project_title = original_grant.get('project_title', '') or ''
+        
+        if not pi_name:
+            return False
+        
+        # Look for grants from same PI with similar title or continuation keywords
+        for grant in all_grants:
+            if grant == original_grant:
+                continue
+                
+            grant_pi = grant.get('contact_pi_name', '') or ''
+            grant_title = grant.get('project_title', '') or ''
+            
+            # Same PI check - ensure both are strings
+            if grant_pi and pi_name and (pi_name.lower() in grant_pi.lower() or grant_pi.lower() in pi_name.lower()):
+                # Check for continuation indicators
+                if grant_title and any(term in grant_title.lower() for term in [
+                    'year 2', 'year 3', 'year 4', 'continuation', 'renewal',
+                    'phase ii', 'phase 2', 'continued', 'supplement'
+                ]):
+                    return True
+                    
+                # Similar title check (basic keyword overlap)
+                if project_title and grant_title:
+                    original_words = set(project_title.lower().split())
+                    grant_words = set(grant_title.lower().split())
+                    
+                    # Remove common words
+                    common_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from'}
+                    original_words -= common_words
+                    grant_words -= common_words
+                    
+                    if len(original_words) > 0:
+                        overlap = len(original_words & grant_words) / len(original_words)
+                        if overlap > 0.4:  # 40% keyword overlap
+                            return True
+        
+        return False
 
     async def _analyze_cancelled_grants(self, institution_name: str, pi_cache: Dict[str, Any] = None) -> Dict[str, Any]:
         """Analyze cancelled/terminated grants impact"""
@@ -652,7 +768,7 @@ class EnhancedDelayedFundingTracker:
                     "ProjectStartDate", "ProjectEndDate", "ProjectTitle", "FiscalYear"
                 ],
                 "offset": 0,
-                "limit": 2000
+                "limit": 500  # NIH API max limit
             }
             
             try:
@@ -686,17 +802,35 @@ class EnhancedDelayedFundingTracker:
                 else:
                     org_name = ''
                 
-                # Check if any major keywords from institution name appear in org name
-                is_institution_match = any(keyword in org_name for keyword in institution_keywords if len(keyword) > 3)
+                # Improved institution matching - require more specific matches
+                is_institution_match = False
+                
+                # For exact match or very close match
+                if institution_upper in org_name or org_name in institution_upper:
+                    is_institution_match = True
+                # For partial match, require multiple significant keywords
+                elif len(institution_keywords) >= 2:
+                    # Count how many significant keywords match (exclude common words)
+                    common_words = {'THE', 'OF', 'AT', 'AND', 'FOR'}
+                    significant_keywords = [k for k in institution_keywords if k not in common_words and len(k) > 3]
+                    
+                    if len(significant_keywords) >= 2:
+                        matches = sum(1 for keyword in significant_keywords if keyword in org_name)
+                        # Require at least 2 significant keyword matches
+                        is_institution_match = matches >= 2
                 
                 if is_institution_match:
                     pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
                     if pi_name:
-                        # Use department lookup function if available
+                        # Use department lookup function if available, with NLP fallback
                         if pi_cache:
+                            from pi_department_lookup import get_department_string
                             dept = get_department_string(pi_name, institution_name)
                         else:
-                            dept = "Unknown Department"
+                            dept = "Other"
+                        
+                        # Normalize department name with NLP analysis if needed
+                        dept = normalize_department_name(dept, grant)
                         
                         amount = float(grant.get('award_amount', 0) or 0)
                         total_cancelled_funding += amount
@@ -730,10 +864,20 @@ class EnhancedDelayedFundingTracker:
                 reverse=True
             )[:10]
             
+            # Calculate risk level based on funding lost and number of grants
+            risk_level = "LOW"
+            grants_cancelled = len(cancelled_grants_by_pi)
+            if grants_cancelled > 5 or total_cancelled_funding > 10000000:
+                risk_level = "HIGH"
+            elif grants_cancelled > 2 or total_cancelled_funding > 5000000:
+                risk_level = "MEDIUM"
+            
             return {
                 'total_lost_funding': total_cancelled_funding,
+                'grants_cancelled': grants_cancelled,
                 'departments_affected': len(cancelled_dept_losses),
                 'total_affected_pis': len(cancelled_grants_by_pi),
+                'risk_level': risk_level,
                 'top_affected_pis': [
                     {
                         'pi_name': pi['pi_name'],
@@ -750,8 +894,10 @@ class EnhancedDelayedFundingTracker:
             print(f"Error in cancelled grants analysis: {e}")
             return {
                 'total_lost_funding': 0,
+                'grants_cancelled': 0,
                 'departments_affected': 0,
                 'total_affected_pis': 0,
+                'risk_level': 'UNKNOWN',
                 'top_affected_pis': [],
                 'department_losses': {},
                 'error': str(e)

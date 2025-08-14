@@ -547,8 +547,8 @@ async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) 
                     pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
                     amount = float(grant.get('award_amount', 0) or 0)
                     
-                    # Check for renewal evidence
-                    renewal_found = await tracker._check_for_renewal_evidence(grant, active_grants)
+                    # Check for renewal evidence using synchronous method
+                    renewal_found = tracker._check_for_renewal_evidence_sync(grant, active_grants)
                     
                     renewal_info = {
                         'grant': grant,
@@ -575,11 +575,14 @@ async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) 
                             # Fallback to grant organization data
                             org_info = grant.get('organization', {})
                             if isinstance(org_info, dict):
-                                dept = org_info.get('dept_type', 'Unknown Department')
+                                dept = org_info.get('dept_type', 'Other')
                             elif isinstance(org_info, list) and org_info:
-                                dept = org_info[0].get('dept_type', 'Unknown Department')
+                                dept = org_info[0].get('dept_type', 'Other')
                             else:
-                                dept = 'Unknown Department'
+                                dept = 'Other'
+                        
+                        # Normalize department name with NLP analysis if needed
+                        dept = normalize_department_name(dept, grant)
                         
                         nonrenewal_dept_losses[dept] = nonrenewal_dept_losses.get(dept, 0) + amount
                         
@@ -736,6 +739,8 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                     pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
                     if pi_name:
                         dept = get_department_string(pi_name, institution_name)
+                        # Normalize department name with NLP analysis if needed
+                        dept = normalize_department_name(dept, grant)
                         amount = float(grant.get('award_amount', 0) or 0)
                         dept_breakdown[dept] = dept_breakdown.get(dept, 0) + amount
                 
@@ -759,6 +764,8 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                         pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
                         if pi_name:
                             dept = get_department_string(pi_name, institution_name)
+                            # Normalize department name with NLP analysis if needed
+                            dept = normalize_department_name(dept, grant)
                             amount = float(grant.get('award_amount', 0) or 0)
                             
                             # Track department losses
@@ -788,40 +795,49 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                 for grant in active_grants:
                     # Try to extract department from grant data
                     org_info = grant.get('organization', {})
-                    dept_type = 'Unknown Department'
+                    dept_type = 'Other'
                     
                     if isinstance(org_info, dict):
-                        dept_type = org_info.get('dept_type', 'Unknown Department')
+                        dept_type = org_info.get('dept_type', 'Other')
                     elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
-                        dept_type = org_info[0].get('dept_type', 'Unknown Department')
+                        dept_type = org_info[0].get('dept_type', 'Other')
                     
-                    if dept_type and dept_type != 'Unknown Department':
+                    # Normalize department name with NLP analysis if needed
+                    dept_type = normalize_department_name(dept_type, grant)
+                    
+                    if dept_type and dept_type != 'Other':
                         amount = float(grant.get('award_amount', 0) or 0)
                         dept_breakdown[dept_type] = dept_breakdown.get(dept_type, 0) + amount
                 
                 # Track cancelled grants by department
                 for grant in terminated_grants:
                     org_info = grant.get('organization', {})
-                    dept_type = 'Unknown Department'
+                    dept_type = 'Other'
                     
                     if isinstance(org_info, dict):
-                        dept_type = org_info.get('dept_type', 'Unknown Department')
+                        dept_type = org_info.get('dept_type', 'Other')
                     elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
-                        dept_type = org_info[0].get('dept_type', 'Unknown Department')
+                        dept_type = org_info[0].get('dept_type', 'Other')
                     
-                    if dept_type and dept_type != 'Unknown Department':
+                    # Normalize department name with NLP analysis if needed
+                    dept_type = normalize_department_name(dept_type, grant)
+                    
+                    if dept_type and dept_type != 'Other':
                         amount = float(grant.get('award_amount', 0) or 0)
                         cancelled_dept_losses[dept_type] = cancelled_dept_losses.get(dept_type, 0) + amount
         else:
             # Simple fallback when no PI cache
             for grant in active_grants:
                 org_info = grant.get('organization', {})
-                dept_type = 'Unknown Department'
+                dept_type = 'Other'
                 
                 if isinstance(org_info, dict):
-                    dept_type = org_info.get('dept_type', 'Unknown Department')
+                    dept_type = org_info.get('dept_type', 'Other')
                 elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
-                    dept_type = org_info[0].get('dept_type', 'Unknown Department')
+                    dept_type = org_info[0].get('dept_type', 'Other')
+                
+                # Normalize department name with NLP analysis if needed
+                dept_type = normalize_department_name(dept_type, grant)
                 
                 if dept_type:
                     amount = float(grant.get('award_amount', 0) or 0)
@@ -830,12 +846,15 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
             # Track cancelled grants by department
             for grant in terminated_grants:
                 org_info = grant.get('organization', {})
-                dept_type = 'Unknown Department'
+                dept_type = 'Other'
                 
                 if isinstance(org_info, dict):
-                    dept_type = org_info.get('dept_type', 'Unknown Department')
+                    dept_type = org_info.get('dept_type', 'Other')
                 elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
-                    dept_type = org_info[0].get('dept_type', 'Unknown Department')
+                    dept_type = org_info[0].get('dept_type', 'Other')
+                
+                # Normalize department name with NLP analysis if needed
+                dept_type = normalize_department_name(dept_type, grant)
                 
                 if dept_type:
                     amount = float(grant.get('award_amount', 0) or 0)
@@ -957,6 +976,66 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
             'note': 'Falling back to comprehensive analysis'
         }
 
+def normalize_department_name(dept_name, grant_context=None):
+    """
+    Enhanced department name normalization with NLP analysis.
+    
+    Args:
+        dept_name: Original department name from grant data
+        grant_context: Dict with grant information for NLP analysis (optional)
+                      Should include: project_title, project_abstract, etc.
+    """
+    if not dept_name or dept_name is None:
+        dept_name = "Other"
+    
+    dept_str = str(dept_name).strip()
+    
+    # Handle various representations of null/none/empty/other
+    if dept_str.lower() in ['null', 'none', '', 'unknown department', 'unknown', 'n/a', 'na', 'other']:
+        # Try to use NLP classification if grant context is available
+        if grant_context:
+            try:
+                from scibert_classifier import predict_from_research_context
+                
+                # Extract text for classification
+                title = grant_context.get('project_title', '')
+                abstract = grant_context.get('abstract', grant_context.get('project_abstract', ''))
+                org_name = ''
+                
+                # Extract organization name from grant data
+                org_info = grant_context.get('organization', {})
+                if isinstance(org_info, dict):
+                    org_name = org_info.get('org_name', '')
+                elif isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get('org_name', '') if isinstance(org_info[0], dict) else ''
+                
+                # Use SciBERT to classify based on project content
+                nlp_result = predict_from_research_context(
+                    title=title,
+                    abstract=abstract,
+                    affiliation=org_name,
+                    keywords=[]
+                )
+                
+                classified_dept = nlp_result.get('department', 'Other')
+                confidence = nlp_result.get('confidence', 0)
+                
+                print(f"🧠 SciBERT analysis: '{title[:50]}...' -> {classified_dept} (confidence: {confidence:.2f})")
+                
+                # Use NLP result if it's not "Unknown" and has reasonable confidence
+                if classified_dept and classified_dept != 'Unknown' and confidence > 0.15:  # Lower threshold
+                    print(f"🧠 ✅ Using SciBERT result: {classified_dept} (confidence: {confidence:.2f})")
+                    return classified_dept
+                else:
+                    print(f"⚠️ SciBERT confidence too low ({confidence:.2f}) or returned Unknown, using 'Other'")
+                        
+            except Exception as e:
+                print(f"⚠️ NLP classification failed: {e}")
+        
+        return "Other"
+    
+    return dept_str
+
 def load_pi_department_cache():
     """Load the PI department cache for matching PIs to departments"""
     try:
@@ -1056,7 +1135,8 @@ async def get_comprehensive_delayed_funding_analysis(
                 tracker = EnhancedDelayedFundingTracker()
                 result = await tracker.analyze_comprehensive_delays(
                     institution_name=institution_name,
-                    pi_cache=pi_cache
+                    pi_cache=pi_cache,
+                    force_refresh=force_refresh
                 )
         else:
             print("⚠️ Fresh cache not available, using comprehensive tracker")
@@ -1064,7 +1144,8 @@ async def get_comprehensive_delayed_funding_analysis(
             tracker = EnhancedDelayedFundingTracker()
             result = await tracker.analyze_comprehensive_delays(
                 institution_name=institution_name,
-                pi_cache=pi_cache
+                pi_cache=pi_cache,
+                force_refresh=force_refresh
             )
         
         # Add metadata
@@ -1106,9 +1187,9 @@ async def get_comprehensive_delayed_funding_analysis(
         }
 
 @app.get("/api/enhanced-delayed-funding/{institution_name}")
-async def get_enhanced_delayed_funding_analysis_legacy(institution_name: str, method: str = "comprehensive"):
+async def get_enhanced_delayed_funding_analysis_legacy(institution_name: str, method: str = "comprehensive", force_refresh: bool = False):
     """Legacy endpoint - redirects to optimized comprehensive analysis"""
-    return await get_comprehensive_delayed_funding_analysis(institution_name, include_departments=True, method=method)
+    return await get_comprehensive_delayed_funding_analysis(institution_name, include_departments=True, method=method, force_refresh=force_refresh)
 
 @app.get("/api/delayed-funding-departments/{institution_name}")
 async def get_delayed_funding_by_departments_legacy(institution_name: str):
