@@ -768,7 +768,7 @@ function App() {
                   <div className="cancelled-metric">
                     <div style={{ fontSize: '12px', color: '#666' }}>PIs Impacted</div>
                     <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#d32f2f' }}>
-                      {institutionDetails.delayed_funding.cancelled_grants_impact.pis_impacted}
+                      {institutionDetails.delayed_funding.cancelled_grants_impact.total_affected_pis || 0}
                     </div>
                   </div>
                 </div>
@@ -981,120 +981,6 @@ function App() {
                 </div>
               </div>
             )}
-
-            {/* Departments with Cancelled Grants */}
-            <div className="departments-section">
-              <h3>Departments with Cancelled Grants</h3>
-              {institutionDetails.departments && institutionDetails.departments.length > 0 ? (
-                <div className="departments-list">
-                  {institutionDetails.departments.map((dept, index) => (
-                    <div key={index} className="department-card" style={{ 
-                      border: '1px solid #ddd', 
-                      borderRadius: '8px', 
-                      padding: '20px', 
-                      marginBottom: '20px',
-                      backgroundColor: dept.total_terminated_funding > 1000000 ? '#ffebee' : '#f9f9f9'
-                    }}>
-                      <div className="department-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                        <h4 style={{ margin: 0, color: '#333' }}>{dept.department}</h4>
-                        <div className="department-summary" style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>
-                            {formatCurrency(dept.total_terminated_funding)}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>
-                            {dept.grants_count} grants • {dept.unique_pis} PIs
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="department-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '15px' }}>
-                        <div className="dept-metric">
-                          <div style={{ fontSize: '12px', color: '#666' }}>Positions at Risk</div>
-                          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.estimated_positions_at_risk}</div>
-                        </div>
-                        <div className="dept-metric">
-                          <div style={{ fontSize: '12px', color: '#666' }}>Grants Lost</div>
-                          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.grants_count}</div>
-                        </div>
-                        <div className="dept-metric">
-                          <div style={{ fontSize: '12px', color: '#666' }}>Unique PIs</div>
-                          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{dept.unique_pis}</div>
-                        </div>
-                      </div>
-
-                      {/* Agency breakdown */}
-                      <div className="agency-breakdown" style={{ marginBottom: '15px' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Funding by Agency:</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                          {Object.entries(dept.agency_breakdown.funding).map(([agency, amount]) => (
-                            <div key={agency} style={{ 
-                              padding: '4px 8px', 
-                              backgroundColor: '#e3f2fd', 
-                              borderRadius: '4px', 
-                              fontSize: '12px' 
-                            }}>
-                              {agency}: {formatCurrency(amount)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Sample grants */}
-                      <div className="grants-preview">
-                        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                          Sample Cancelled Grants:
-                        </div>
-                        <div className="grants-list">
-                          {dept.grants.slice(0, 3).map((grant, grantIndex) => (
-                            <div key={grantIndex} className="grant-item" style={{ 
-                              padding: '10px', 
-                              border: '1px solid #e0e0e0', 
-                              borderRadius: '4px', 
-                              marginBottom: '8px',
-                              backgroundColor: 'white'
-                            }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div style={{ flex: 1, marginRight: '10px' }}>
-                                  <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>
-                                    {grant.pi_name}
-                                  </div>
-                                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                                    {grant.project_title.length > 80 ? 
-                                      grant.project_title.substring(0, 80) + '...' : 
-                                      grant.project_title
-                                    }
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#888' }}>
-                                    {grant.funding_agency} • {grant.award_id}
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                  <div style={{ fontWeight: 'bold', color: '#d32f2f' }}>
-                                    {formatCurrency(grant.award_amount)}
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#666' }}>
-                                    {grant.project_start_date} - {grant.project_end_date}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          {dept.grants.length > 3 && (
-                            <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
-                              ... and {dept.grants.length - 3} more grants
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
-                  No cancelled grants found for this institution, or department information not available.
-                </div>
-              )}
-            </div>
           </div>
         )}
       </div>
@@ -1293,7 +1179,7 @@ function App() {
               <div className="cancelled-metric">
                 <div style={{ fontSize: '12px', color: '#666' }}>PIs Impacted</div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#d32f2f' }}>
-                  {data.cancelled_grants_impact.pis_impacted}
+                  {data.cancelled_grants_impact.total_affected_pis || 0}
                 </div>
               </div>
             </div>

@@ -1644,24 +1644,100 @@ async def get_usaspending_cache_stats():
 async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20):
     """Get institutions ranked by layoff risk using comprehensive multi-agency data."""
     try:
-        from layoff_estimator import generate_layoff_risk_leaderboard
+        print(f"🚀 Starting layoff leaderboard request: cost_per_researcher={cost_per_researcher}, limit={limit}")
         
+        # Create cache key based on parameters
+        cache_key = f"layoff_leaderboard_{cost_per_researcher}_{limit}"
+        
+        # Try to get cached result first
+        cached_result = get_cached_general_data(cache_key)
+        if cached_result:
+            print(f"✅ Returning cached leaderboard data (key: {cache_key})")
+            # Update cache info to show it's cached
+            cached_result['cache_info'] = {
+                "cached": True,
+                "cache_key": cache_key,
+                "served_from_cache_at": datetime.now().isoformat()
+            }
+            return cached_result
+        
+        print("🔄 No cached data found, generating fresh leaderboard...")
+        
+        from layoff_estimator import generate_layoff_risk_leaderboard
+        print("✅ Successfully imported generate_layoff_risk_leaderboard")
+        
+        print("📊 Calling generate_layoff_risk_leaderboard...")
         result = await generate_layoff_risk_leaderboard(cost_per_researcher, limit)
+        print("✅ generate_layoff_risk_leaderboard completed")
         
         # Convert the format to match frontend expectations
         if 'data' in result:
+            print("🔄 Converting data format for frontend...")
             # The new format uses 'data' key, convert to 'institutions' for frontend compatibility
-            return {
+            response_data = {
                 "institutions": result['data'],
                 "total_institutions": result.get('total_institutions', len(result['data'])),
                 "methodology": result.get('methodology', {}),
-                "last_updated": result.get('last_updated', datetime.now().isoformat())
+                "last_updated": result.get('last_updated', datetime.now().isoformat()),
+                "cache_info": {
+                    "cached": False,
+                    "cache_key": cache_key,
+                    "generated_at": datetime.now().isoformat()
+                }
             }
+            
+            # Cache the result for future requests
+            save_cached_general_data(cache_key, response_data)
+            print(f"✅ Cached leaderboard data (key: {cache_key})")
+            
+            print(f"✅ Returning {len(response_data['institutions'])} institutions")
+            return response_data
         
+        print("⚠️ No 'data' key in result, returning as-is")
         return result
         
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
     except Exception as e:
+        print(f"❌ Unexpected error in leaderboard endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
+
+@app.post("/api/clear-leaderboard-cache")
+async def clear_leaderboard_cache():
+    """Clear the cached leaderboard data to force fresh generation."""
+    try:
+        # Clear all leaderboard-related cache entries
+        cache_patterns = ["layoff_leaderboard_"]
+        cleared_count = 0
+        
+        # This is a simple implementation - in a production system, you might want
+        # more sophisticated cache pattern matching
+        for pattern in cache_patterns:
+            # Try common parameter combinations
+            common_params = [
+                (200000, 20), (200000, 25), (200000, 10), (200000, 50),
+                (150000, 20), (250000, 20), (300000, 20)
+            ]
+            
+            for cost, limit in common_params:
+                cache_key = f"layoff_leaderboard_{cost}_{limit}"
+                if get_cached_general_data(cache_key):
+                    # Clear by saving empty data with 0 TTL
+                    save_cached_general_data(cache_key, None, ttl_hours=0)
+                    cleared_count += 1
+        
+        return {
+            "status": "success",
+            "cleared_entries": cleared_count,
+            "message": f"Cleared {cleared_count} leaderboard cache entries",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 @app.get("/api/test-combined-grants")
 async def test_combined_grants_endpoint():

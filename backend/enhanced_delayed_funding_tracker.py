@@ -749,7 +749,10 @@ class EnhancedDelayedFundingTracker:
             # Use httpx instead of aiohttp (like the working implementation)
             import httpx
             
-            # NIH terminated grants search using project end date  
+            # Fetch terminated grants from multiple agencies
+            
+            # 1. NIH terminated grants search using project end date  
+            print("🔍 Fetching terminated NIH grants...")
             nih_url = "https://api.reporter.nih.gov/v2/projects/search"
             
             # Use end date criteria instead of award status
@@ -776,14 +779,86 @@ class EnhancedDelayedFundingTracker:
                     response = await client.post(nih_url, json=payload)
                     response.raise_for_status()
                     data = response.json()
-                    terminated_grants.extend(data.get("results", []))
-                    print(f"Fetched {len(terminated_grants)} recently ended grants from NIH")
+                    nih_terminated = data.get("results", [])
+                    # Add agency identifier
+                    for grant in nih_terminated:
+                        grant['funding_agency'] = 'NIH'
+                    terminated_grants.extend(nih_terminated)
+                    print(f"Fetched {len(nih_terminated)} recently ended grants from NIH")
             except httpx.RequestError as e:
-                print(f"Error fetching terminated grants (request): {e}")
+                print(f"Error fetching NIH terminated grants (request): {e}")
             except httpx.HTTPStatusError as e:
-                print(f"Error fetching terminated grants (HTTP): {e}")
+                print(f"Error fetching NIH terminated grants (HTTP): {e}")
             except Exception as e:
-                print(f"Error fetching terminated grants (general): {e}")
+                print(f"Error fetching NIH terminated grants (general): {e}")
+            
+            # 2. NSF terminated grants search - identify grants that ended unusually early
+            print("🔍 Fetching potentially terminated NSF grants...")
+            nsf_url = "https://www.research.gov/awardapi-service/v1/awards.json"
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                    # Search for NSF grants that ended in the last year
+                    nsf_params = {
+                        'printFields': 'id,title,startDate,expDate,awardeeName,fundsObligatedAmt,pdPIName,agency',
+                        'rpp': '500',
+                        'offset': '1'
+                    }
+                    
+                    # Add institution filter if specific enough
+                    if len(institution_name.split()) >= 2:
+                        # Use the main institution name for NSF search
+                        main_institution = institution_name.split()[0] + " " + institution_name.split()[1]
+                        nsf_params['awardeeName'] = main_institution
+                    
+                    response = await client.get(nsf_url, params=nsf_params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    nsf_awards = data.get('response', {}).get('award', [])
+                    nsf_terminated = []
+                    
+                    # Filter for grants that ended in the last year and may be terminated
+                    for award in nsf_awards:
+                        exp_date_str = award.get('expDate', '')
+                        start_date_str = award.get('startDate', '')
+                        
+                        if exp_date_str and start_date_str:
+                            try:
+                                exp_date_obj = datetime.strptime(exp_date_str[:10], '%Y-%m-%d')
+                                start_date_obj = datetime.strptime(start_date_str[:10], '%Y-%m-%d')
+                                
+                                # Check if grant ended in the last year
+                                if start_date <= exp_date_obj <= end_date:
+                                    # Calculate grant duration in months
+                                    duration_months = (exp_date_obj - start_date_obj).days / 30.44
+                                    
+                                    # Flag as potentially terminated if duration < 18 months (typical NSF grants are 2-3+ years)
+                                    if duration_months < 18:
+                                        # Convert to format similar to NIH data
+                                        nsf_grant = {
+                                            'project_num': award.get('id'),
+                                            'organization': {'org_name': award.get('awardeeName', '')},
+                                            'contact_pi_name': award.get('pdPIName', ''),
+                                            'award_amount': award.get('fundsObligatedAmt', 0),
+                                            'project_start_date': start_date_str,
+                                            'project_end_date': exp_date_str,
+                                            'project_title': award.get('title', ''),
+                                            'funding_agency': 'NSF'
+                                        }
+                                        nsf_terminated.append(nsf_grant)
+                            except ValueError:
+                                continue  # Skip grants with invalid dates
+                    
+                    terminated_grants.extend(nsf_terminated)
+                    print(f"Fetched {len(nsf_terminated)} potentially terminated NSF grants (duration < 18 months)")
+                    
+            except httpx.RequestError as e:
+                print(f"Error fetching NSF terminated grants (request): {e}")
+            except httpx.HTTPStatusError as e:
+                print(f"Error fetching NSF terminated grants (HTTP): {e}")
+            except Exception as e:
+                print(f"Error fetching NSF terminated grants (general): {e}")
             
             # Process terminated grants by department
             cancelled_dept_losses = {}
