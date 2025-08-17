@@ -977,7 +977,7 @@ async def get_institution_details(institution: str, include_cancelled: bool = Fa
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting institution details: {str(e)}")
-    """
+        
     try:
         from layoff_estimator import fetch_combined_grants
         import json
@@ -1198,42 +1198,6 @@ def calculate_institution_risk(institution, data, cost_per_researcher):
         "terminated_grants_count": len(data["terminated_grants"]),
         "risk_level": level
     }
-
-@app.post("/api/refresh-cache")
-async def refresh_grant_cache():
-    """
-    Force refresh all grant caches and fetch fresh data from all APIs.
-    This will clear cached data and fetch new grants from NIH, NSF, and USASpending APIs.
-    """
-    try:
-        # Clear all caches
-        clear_cache()
-        
-        # Force fresh data fetch
-        from layoff_estimator import fetch_combined_grants
-        fresh_grants = await fetch_combined_grants(use_cache=False)
-        
-        # Count by agency
-        nih_count = len([g for g in fresh_grants if g.get("funding_agency") == "NIH"])
-        nsf_count = len([g for g in fresh_grants if g.get("funding_agency") == "NSF"])
-        dod_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOD"])
-        doe_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOE"])
-        
-        return {
-            "status": "success",
-            "message": "Grant cache refreshed successfully",
-            "total_grants": len(fresh_grants),
-            "agency_breakdown": {
-                "NIH": nih_count,
-                "NSF": nsf_count,
-                "DOD": dod_count,
-                "DOE": doe_count
-            },
-            "refreshed_at": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
