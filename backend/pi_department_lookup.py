@@ -13,7 +13,7 @@ import asyncio
 from typing import Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
-from scibert_classifier import predict_department_scibert, predict_from_research_context
+from lightweight_classifier import enhanced_classifier
 
 # --- Crossref-based department extraction utilities ---
 DEPT_VOCAB = [
@@ -462,26 +462,22 @@ class ORCIDLookup:
                         debug_log.write(f"[DEBUG] Combined journal text: {journal_text}\n")
                     
                     # Use enhanced SciBERT prediction with multiple text sources
-                    scibert_result = predict_from_research_context(
-                        title=title_text,
-                        abstract=abstract_text,
-                        affiliation=affiliation_text + " " + journal_text + " " + keyword_text,
-                        keywords=keywords[:10] if keywords else []
-                    )
+                    research_context = f"{title_text} {abstract_text} {affiliation_text} {journal_text} {' '.join(keywords[:10] if keywords else [])}"
+                    scibert_result = enhanced_classifier.classify_department(research_context)
                     
                     with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
                         debug_log.write(f"[DEBUG] SciBERT result: {scibert_result}\n")
-                        debug_log.write(f"[DEBUG] Checking confidence: {scibert_result['confidence']} > 0.20 = {scibert_result['confidence'] > 0.20}\n")
-                        debug_log.write(f"[DEBUG] Department != Unknown: {scibert_result['department'] != 'Unknown'}\n")
+                        debug_log.write(f"[DEBUG] Checking confidence: {scibert_result.confidence} > 0.20 = {scibert_result.confidence > 0.20}\n")
+                        debug_log.write(f"[DEBUG] Department != Unknown: {scibert_result.field != 'Unknown'}\n")
                     
                     # Lower confidence threshold for ORCID-based research analysis
                     # since we have rich publication data
-                    if (scibert_result['department'] != 'Unknown' and 
-                        scibert_result['confidence'] > 0.20):  # Lower threshold for rich ORCID data
+                    if (scibert_result.field != 'Unknown' and 
+                        scibert_result.confidence > 0.20):  # Lower threshold for rich ORCID data
                         with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
-                            debug_log.write(f"[DEBUG] Enhanced ORCID SciBERT found: {scibert_result['department']} (confidence: {scibert_result['confidence']:.3f})\n")
+                            debug_log.write(f"[DEBUG] Enhanced ORCID SciBERT found: {scibert_result.field} (confidence: {scibert_result.confidence:.3f})\n")
                             debug_log.write(f"[DEBUG] Research context - Titles: {len(titles)}, Abstracts: {len(abstracts)}, Journals: {len(journal_names)}\n")
-                        return scibert_result['department']
+                        return scibert_result.field
                     else:
                         with open(os.path.join(os.path.dirname(__file__), "debug.log"), "a", encoding="utf-8") as debug_log:
                             debug_log.write(f"[DEBUG] SciBERT result failed threshold check\n")
@@ -693,18 +689,13 @@ async def get_pi_department(name: str, institution: str, force_refresh: bool = F
         text_for_classification = " ".join(research_context)
         
         if len(text_for_classification.strip()) > 10:  # Ensure we have meaningful text
-            scibert_result = predict_from_research_context(
-                title="",
-                abstract="",
-                affiliation=text_for_classification,
-                keywords=[]
-            )
+            scibert_result = enhanced_classifier.classify_department(text_for_classification)
             
             # Lower threshold for fallback since we have limited context
-            if (scibert_result['department'] != 'Unknown' and 
-                scibert_result['confidence'] > 0.22):  # Lower threshold for fallback
+            if (scibert_result.field != 'Unknown' and 
+                scibert_result.confidence > 0.22):  # Lower threshold for fallback
                 
-                normalized_dept = DepartmentNormalizer.normalize(scibert_result['department'])
+                normalized_dept = DepartmentNormalizer.normalize(scibert_result.field)
                 
                 # Cache result
                 _cache.set(name, institution, normalized_dept, 'scibert', 'medium')
