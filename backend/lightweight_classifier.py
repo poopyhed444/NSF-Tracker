@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-Lightweight Enhanced Department Classifier
-Uses TF-IDF and keyword matching without PyTorch dependencies.
+Enhanced Lightweight Department Classifier with Web Scraping
+Uses TF-IDF, keyword matching, and real-time department data scraping.
 """
 
 import json
 import re
 import math
+import asyncio
+import aiohttp
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
 from collections import Counter, defaultdict
+from bs4 import BeautifulSoup
+import time
+from datetime import datetime
 
 @dataclass
 class ClassificationResult:
@@ -18,13 +23,29 @@ class ClassificationResult:
     matched_departments: List[str]
     reasoning: str
 
-class LightweightDepartmentClassifier:
+class EnhancedLightweightClassifier:
     def __init__(self, dataset_path: str = 'enhanced_department_dataset.json'):
         self.dataset_path = dataset_path
         self.department_data = {}
         self.field_keywords = {}
         self.department_vectors = {}
         self.vocabulary = set()
+        self.scraped_departments = set()
+        
+        # Load and initialize
+        self.load_department_dataset()
+        self.build_field_keywords()
+        self.build_vocabulary()
+        self.build_department_vectors()
+        
+        # University scraping configuration
+        self.universities_to_scrape = {
+            "Harvard University": ["school", "department", "division"],
+            "MIT": ["department", "laboratory", "center"],
+            "Stanford University": ["department", "school", "institute"],
+            "UC Berkeley": ["department", "college", "school"],
+            "Yale University": ["department", "school", "program"]
+        }
         
         # Load and initialize
         self.load_department_dataset()
@@ -96,17 +117,19 @@ class LightweightDepartmentClassifier:
     
     def build_vocabulary(self):
         """Build vocabulary from all departments"""
+        vocab_set = set()
+        
         for field, departments in self.department_data.items():
             for dept in departments:
                 words = self.tokenize(dept.lower())
-                self.vocabulary.update(words)
+                vocab_set.update(words)
         
         # Add field keywords to vocabulary
         for field, keywords in self.field_keywords.items():
-            self.vocabulary.update(keywords['primary'])
-            self.vocabulary.update(keywords['secondary'])
+            vocab_set.update(keywords['primary'])
+            vocab_set.update(keywords['secondary'])
         
-        self.vocabulary = list(self.vocabulary)
+        self.vocabulary = list(vocab_set)
         print(f"🔧 Built vocabulary with {len(self.vocabulary)} unique terms")
     
     def tokenize(self, text: str) -> List[str]:
@@ -195,6 +218,123 @@ class LightweightDepartmentClassifier:
         
         return primary_score + secondary_score
     
+    async def scrape_university_departments(self, university_name: str, keywords: List[str]) -> Set[str]:
+        """Scrape department names from a university website"""
+        departments = set()
+        
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                # Search for university departments page
+                search_url = f"https://www.google.com/search?q={university_name.replace(' ', '+')}+departments+academic"
+                
+                async with session.get(search_url) as response:
+                    if response.status == 200:
+                        html = await response.text()
+                        soup = BeautifulSoup(html, 'html.parser')
+                        
+                        # Extract department names from search results
+                        for link in soup.find_all('a', href=True):
+                            text = link.get_text().lower()
+                            for keyword in keywords:
+                                if keyword in text and any(field in text for field in ['engineering', 'science', 'medicine', 'arts', 'business']):
+                                    # Clean and extract department name
+                                    dept_name = self.clean_department_name(link.get_text())
+                                    if dept_name:
+                                        departments.add(dept_name)
+                                        
+        except Exception as e:
+            print(f"⚠️ Could not scrape {university_name}: {e}")
+        
+        return departments
+    
+    def clean_department_name(self, raw_name: str) -> Optional[str]:
+        """Clean and standardize department names"""
+        if not raw_name or len(raw_name) < 5:
+            return None
+            
+        # Remove common prefixes/suffixes
+        cleaned = re.sub(r'^(Department of|School of|College of|Division of|Institute of|Center for)\s+', '', raw_name, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\s+(Department|School|College|Division|Institute|Center)$', '', cleaned, flags=re.IGNORECASE)
+        
+        # Remove special characters and normalize
+        cleaned = re.sub(r'[^\w\s&-]', '', cleaned)
+        cleaned = ' '.join(cleaned.split())  # Normalize whitespace
+        
+        # Skip if too short or contains unwanted terms
+        unwanted = ['home', 'about', 'contact', 'news', 'events', 'search', 'login']
+        if len(cleaned) < 3 or any(word in cleaned.lower() for word in unwanted):
+            return None
+            
+        return cleaned.title()
+    
+    async def enhance_department_dataset(self):
+        """Enhance the department dataset with scraped data"""
+        print("🔍 Enhancing department dataset with web scraping...")
+        
+        tasks = []
+        for university, keywords in self.universities_to_scrape.items():
+            task = self.scrape_university_departments(university, keywords)
+            tasks.append(task)
+        
+        # Run scraping tasks concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        total_new_depts = 0
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                continue
+                
+            university = list(self.universities_to_scrape.keys())[i]
+            new_departments = result
+            
+            if new_departments:
+                # Categorize new departments
+                for dept in new_departments:
+                    field = self.categorize_department(dept)
+                    if field and field in self.department_data:
+                        if dept not in self.department_data[field]:
+                            self.department_data[field].append(dept)
+                            total_new_depts += 1
+                            
+                print(f"📚 Added {len(new_departments)} departments from {university}")
+        
+        if total_new_depts > 0:
+            print(f"✅ Enhanced dataset with {total_new_depts} new departments")
+            # Rebuild vectors with new data
+            self.build_vocabulary()
+            self.build_department_vectors()
+            
+            # Save updated dataset
+            with open(self.dataset_path, 'w') as f:
+                json.dump(self.department_data, f, indent=2)
+    
+    def categorize_department(self, dept_name: str) -> Optional[str]:
+        """Categorize a department into a field based on keywords"""
+        dept_lower = dept_name.lower()
+        
+        # Engineering keywords
+        if any(word in dept_lower for word in ['engineering', 'computer', 'software', 'systems', 'technology']):
+            return 'engineering'
+        
+        # Medical sciences keywords
+        if any(word in dept_lower for word in ['medicine', 'medical', 'health', 'clinical', 'biomedical']):
+            return 'medical_sciences'
+        
+        # Physical sciences keywords
+        if any(word in dept_lower for word in ['physics', 'chemistry', 'mathematics', 'statistics', 'astronomy']):
+            return 'physical_sciences'
+        
+        # Biological sciences keywords
+        if any(word in dept_lower for word in ['biology', 'genetics', 'ecology', 'neuroscience', 'biochemistry']):
+            return 'biological_sciences'
+        
+        # Social sciences keywords
+        if any(word in dept_lower for word in ['psychology', 'economics', 'political', 'sociology', 'anthropology']):
+            return 'social_sciences'
+        
+        return None
+
     def classify_department(self, text: str) -> ClassificationResult:
         """Classify department text using hybrid approach"""
         text_vector = self.text_to_vector(text)
@@ -252,7 +392,7 @@ class LightweightDepartmentClassifier:
         )
 
 # Create global instance
-enhanced_classifier = LightweightDepartmentClassifier()
+enhanced_classifier = EnhancedLightweightClassifier()
 
 def classify_text(text: str) -> ClassificationResult:
     """Convenience function for backward compatibility"""
