@@ -14,6 +14,12 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [showDelayedFundingAnalysis, setShowDelayedFundingAnalysis] = useState(false);
   const [showDepartmentDelayedFunding, setShowDepartmentDelayedFunding] = useState(false);
+  
+  // PI Details Modal State
+  const [selectedPi, setSelectedPi] = useState(null);
+  const [piDetails, setPiDetails] = useState(null);
+  const [piDetailsLoading, setPiDetailsLoading] = useState(false);
+  const [showPiModal, setShowPiModal] = useState(false);
 
   const fetchLeaderboard = async () => {
     try {
@@ -192,6 +198,29 @@ function App() {
       setError(`Failed to download CSV: ${err.message}`);
       console.error('Error downloading CSV:', err);
     }
+  };
+
+  const fetchPiDetails = async (piName, institutionName) => {
+    try {
+      setPiDetailsLoading(true);
+      setError(null);
+      
+      const response = await axios.get(`/api/pi-grant-details/${encodeURIComponent(institutionName)}/${encodeURIComponent(piName)}`);
+      setPiDetails(response.data);
+      setSelectedPi(piName);
+      setShowPiModal(true);
+    } catch (err) {
+      setError(`Failed to fetch PI details: ${err.message}`);
+      console.error('Error fetching PI details:', err);
+    } finally {
+      setPiDetailsLoading(false);
+    }
+  };
+
+  const closePiModal = () => {
+    setShowPiModal(false);
+    setSelectedPi(null);
+    setPiDetails(null);
   };
 
   useEffect(() => {
@@ -786,10 +815,16 @@ function App() {
                           padding: '8px 12px', 
                           backgroundColor: 'white', 
                           borderRadius: '4px',
-                          border: '1px solid #ffcdd2'
-                        }}>
+                          border: '1px solid #ffcdd2',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                        >
                           <div>
-                            <strong>{pi.pi_name}</strong>
+                            <strong style={{ color: '#1976d2', textDecoration: 'underline' }}>{pi.pi_name}</strong>
                             <div style={{ fontSize: '12px', color: '#666' }}>{pi.department}</div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
@@ -915,10 +950,16 @@ function App() {
                               padding: '8px 12px', 
                               backgroundColor: 'white', 
                               borderRadius: '4px',
-                              border: '1px solid #ffcc02'
-                            }}>
+                              border: '1px solid #ffcc02',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                            >
                               <div>
-                                <strong>{pi.pi_name}</strong>
+                                <strong style={{ color: '#1976d2', textDecoration: 'underline' }}>{pi.pi_name}</strong>
                                 <div style={{ fontSize: '12px', color: '#666' }}>{pi.department}</div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
@@ -1197,10 +1238,16 @@ function App() {
                       padding: '8px 12px', 
                       backgroundColor: 'white', 
                       borderRadius: '4px',
-                      border: '1px solid #ffcdd2'
-                    }}>
+                      border: '1px solid #ffcdd2',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                    >
                       <div>
-                        <strong>{pi.pi_name}</strong>
+                        <strong style={{ color: '#1976d2', textDecoration: 'underline' }}>{pi.pi_name}</strong>
                         <div style={{ fontSize: '12px', color: '#666' }}>{pi.department}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>

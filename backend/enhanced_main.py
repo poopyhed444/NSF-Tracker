@@ -1922,6 +1922,102 @@ async def download_delayed_funding_csv(institution_name: str, method: str = "com
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating CSV: {str(e)}")
 
+@app.get("/api/pi-grant-details/{institution_name}/{pi_name}")
+async def get_pi_grant_details(institution_name: str, pi_name: str):
+    """Get detailed grant information for a specific PI, including cancelled and non-renewed grants."""
+    try:
+        # Get enhanced delayed funding analysis which includes PI-specific data
+        analysis_data = await get_comprehensive_delayed_funding_analysis(
+            institution_name=institution_name,
+            method="comprehensive",
+            include_departments=True
+        )
+        
+        # Initialize PI details structure
+        pi_details = {
+            "pi_name": pi_name,
+            "institution": institution_name,
+            "total_lost_funding": 0,
+            "cancelled_grants": [],
+            "nonrenewal_grants": [],
+            "department": "Unknown",
+            "summary": {
+                "total_grants_affected": 0,
+                "cancelled_count": 0,
+                "nonrenewal_count": 0,
+                "total_funding_lost": 0
+            }
+        }
+        
+        # Search through cancelled grants impact
+        if analysis_data.get('cancelled_grants_impact', {}).get('top_affected_pis'):
+            for pi_data in analysis_data['cancelled_grants_impact']['top_affected_pis']:
+                if pi_data.get('pi_name', '').strip().lower() == pi_name.strip().lower():
+                    pi_details["department"] = pi_data.get('department', 'Unknown')
+                    pi_details["cancelled_grants"] = pi_data.get('grants', [])
+                    pi_details["summary"]["cancelled_count"] = len(pi_details["cancelled_grants"])
+                    
+                    # Calculate cancelled funding total
+                    cancelled_funding = sum(grant.get('amount', 0) for grant in pi_details["cancelled_grants"])
+                    pi_details["total_lost_funding"] += cancelled_funding
+                    break
+        
+        # Search through non-renewal grants impact
+        if analysis_data.get('nonrenewal_grants_impact', {}).get('top_affected_pis'):
+            for pi_data in analysis_data['nonrenewal_grants_impact']['top_affected_pis']:
+                if pi_data.get('pi_name', '').strip().lower() == pi_name.strip().lower():
+                    if pi_details["department"] == "Unknown":
+                        pi_details["department"] = pi_data.get('department', 'Unknown')
+                    pi_details["nonrenewal_grants"] = pi_data.get('grants', [])
+                    pi_details["summary"]["nonrenewal_count"] = len(pi_details["nonrenewal_grants"])
+                    
+                    # Calculate non-renewal funding total
+                    nonrenewal_funding = sum(grant.get('amount', 0) for grant in pi_details["nonrenewal_grants"])
+                    pi_details["total_lost_funding"] += nonrenewal_funding
+                    break
+        
+        # Update summary totals
+        pi_details["summary"]["total_grants_affected"] = (
+            pi_details["summary"]["cancelled_count"] + pi_details["summary"]["nonrenewal_count"]
+        )
+        pi_details["summary"]["total_funding_lost"] = pi_details["total_lost_funding"]
+        
+        # Enhanced grant details with department classification
+        all_grants = pi_details["cancelled_grants"] + pi_details["nonrenewal_grants"]
+        for grant in all_grants:
+            # Add grant type for easy identification
+            if grant in pi_details["cancelled_grants"]:
+                grant["grant_type"] = "cancelled"
+                grant["status"] = "Cancelled/Terminated"
+            else:
+                grant["grant_type"] = "non_renewal"
+                grant["status"] = "Non-Renewed"
+            
+            # Enhance with department classification if available
+            if grant.get('title') and grant.get('abstract'):
+                try:
+                    research_context = f"{grant.get('title', '')} {grant.get('abstract', '')}"
+                    dept_prediction = normalize_department_name(pi_details["department"], research_context)
+                    if dept_prediction and dept_prediction != "Unknown":
+                        grant["predicted_department"] = dept_prediction
+                except Exception as e:
+                    print(f"Error classifying grant department for {grant.get('award_id', 'unknown')}: {e}")
+                    grant["predicted_department"] = pi_details["department"]
+        
+        # If no grants found, return a not found response
+        if pi_details["summary"]["total_grants_affected"] == 0:
+            return {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "message": "No cancelled or non-renewed grants found for this PI",
+                "summary": pi_details["summary"]
+            }
+        
+        return pi_details
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting PI grant details: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting Enhanced NSF-Tracker API with Optimized Caching...")

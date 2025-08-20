@@ -43,10 +43,10 @@ def normalize_department_name(dept_name, grant_context=None):
     
     # Handle various representations of null/none/empty/other
     if dept_str.lower() in ['null', 'none', '', 'unknown department', 'unknown', 'n/a', 'na', 'other']:
-        # Try to use NLP classification if grant context is available
+        # Try to use BERT classification if grant context is available
         if grant_context:
             try:
-                from scibert_classifier import predict_from_research_context
+                from bert_classifier import predict_from_research_context
                 
                 # Extract text for classification
                 title = grant_context.get('project_title', '')
@@ -60,7 +60,7 @@ def normalize_department_name(dept_name, grant_context=None):
                 elif isinstance(org_info, list) and org_info:
                     org_name = org_info[0].get('org_name', '') if isinstance(org_info[0], dict) else ''
                 
-                # Use SciBERT to classify based on project content
+                # Use Enhanced BERT to classify based on project content
                 nlp_result = predict_from_research_context(
                     title=title,
                     abstract=abstract,
@@ -71,17 +71,17 @@ def normalize_department_name(dept_name, grant_context=None):
                 classified_dept = nlp_result.get('department', 'Other')
                 confidence = nlp_result.get('confidence', 0)
                 
-                print(f"🧠 SciBERT analysis: '{title[:50]}...' -> {classified_dept} (confidence: {confidence:.2f})")
+                print(f"� Enhanced BERT analysis: '{title[:50]}...' -> {classified_dept} (confidence: {confidence:.2f})")
                 
-                # Use NLP result if it's not "Unknown" and has reasonable confidence
-                if classified_dept and classified_dept != 'Unknown' and confidence > 0.15:  # Lower threshold
-                    print(f"🧠 ✅ Using SciBERT result: {classified_dept} (confidence: {confidence:.2f})")
+                # Use BERT result if it's not "Unknown" and has reasonable confidence
+                if classified_dept and classified_dept != 'Unknown' and confidence > 0.05:  # Lower threshold for BERT
+                    print(f"� ✅ Using Enhanced BERT result: {classified_dept} (confidence: {confidence:.2f})")
                     return classified_dept
                 else:
-                    print(f"⚠️ SciBERT confidence too low ({confidence:.2f}) or returned Unknown, using 'Other'")
+                    print(f"⚠️ Enhanced BERT confidence too low ({confidence:.2f}) or returned Unknown, using 'Other'")
                         
             except Exception as e:
-                print(f"⚠️ NLP classification failed: {e}")
+                print(f"⚠️ Enhanced BERT classification failed: {e}")
         
         return "Other"
     
@@ -92,9 +92,10 @@ from delayed_funding_tracker import DelayedFundingTracker
 from layoff_estimator import fetch_institution_grants, fetch_total_funding_grants
 from grant_cache import get_combined_cache, save_combined_cache, clear_cache
 try:
-    from scibert_classifier import ScibertClassifier
+    from bert_classifier import get_bert_classifier
+    BertClassifier = get_bert_classifier
 except ImportError:
-    ScibertClassifier = None
+    BertClassifier = None
 
 
 class EnhancedDelayedFundingTracker:
