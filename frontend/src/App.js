@@ -1355,10 +1355,16 @@ function App() {
                       padding: '8px 12px', 
                       backgroundColor: 'white', 
                       borderRadius: '4px',
-                      border: '1px solid #ffcc02'
-                    }}>
+                      border: '1px solid #ffcc02',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                    >
                       <div>
-                        <strong>{pi.pi_name}</strong>
+                        <strong style={{ color: '#1976d2', textDecoration: 'underline' }}>{pi.pi_name}</strong>
                         <div style={{ fontSize: '12px', color: '#666' }}>{pi.department}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
