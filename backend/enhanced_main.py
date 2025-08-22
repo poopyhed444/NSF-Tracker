@@ -18,6 +18,87 @@ from optimized_cache import (
     clear_cache as clear_optimized_cache
 )
 
+# Global PI details cache
+pi_details_cache = {}
+
+def cache_pi_details(institution_name: str, cancelled_grants_by_pi: dict, nonrenewal_grants_by_pi: dict):
+    """Cache detailed PI grant information for fast retrieval"""
+    global pi_details_cache
+    
+    institution_key = institution_name.lower().strip()
+    pi_details_cache[institution_key] = {}
+    
+    # Cache cancelled grants data
+    for pi_name, pi_data in cancelled_grants_by_pi.items():
+        pi_key = f"{institution_key}|{pi_name.lower().strip()}"
+        
+        if pi_key not in pi_details_cache[institution_key]:
+            pi_details_cache[institution_key][pi_key] = {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "department": pi_data.get('department', 'Unknown'),
+                "total_lost_funding": 0,
+                "cancelled_grants": [],
+                "nonrenewal_grants": [],
+                "summary": {
+                    "total_grants_affected": 0,
+                    "cancelled_count": 0,
+                    "nonrenewal_count": 0,
+                    "total_funding_lost": 0
+                }
+            }
+        
+        # Add cancelled grants
+        pi_details_cache[institution_key][pi_key]["cancelled_grants"] = pi_data.get('grants', [])
+        pi_details_cache[institution_key][pi_key]["total_lost_funding"] += pi_data.get('lost_funding', 0)
+        pi_details_cache[institution_key][pi_key]["summary"]["cancelled_count"] = len(pi_data.get('grants', []))
+    
+    # Cache non-renewal grants data  
+    for pi_name, pi_data in nonrenewal_grants_by_pi.items():
+        pi_key = f"{institution_key}|{pi_name.lower().strip()}"
+        
+        if pi_key not in pi_details_cache[institution_key]:
+            pi_details_cache[institution_key][pi_key] = {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "department": pi_data.get('department', 'Unknown'),
+                "total_lost_funding": 0,
+                "cancelled_grants": [],
+                "nonrenewal_grants": [],
+                "summary": {
+                    "total_grants_affected": 0,
+                    "cancelled_count": 0,
+                    "nonrenewal_count": 0,
+                    "total_funding_lost": 0
+                }
+            }
+        
+        # Add non-renewal grants
+        pi_details_cache[institution_key][pi_key]["nonrenewal_grants"] = pi_data.get('grants', [])
+        pi_details_cache[institution_key][pi_key]["total_lost_funding"] += pi_data.get('lost_funding', 0)
+        pi_details_cache[institution_key][pi_key]["summary"]["nonrenewal_count"] = len(pi_data.get('grants', []))
+    
+    # Update summary totals for all PIs
+    for pi_key, pi_details in pi_details_cache[institution_key].items():
+        pi_details["summary"]["total_grants_affected"] = (
+            pi_details["summary"]["cancelled_count"] + pi_details["summary"]["nonrenewal_count"]
+        )
+        pi_details["summary"]["total_funding_lost"] = pi_details["total_lost_funding"]
+    
+    print(f"✅ Cached details for {len(pi_details_cache[institution_key])} PIs at {institution_name}")
+
+def get_cached_pi_details(institution_name: str, pi_name: str):
+    """Retrieve PI details from cache"""
+    global pi_details_cache
+    
+    institution_key = institution_name.lower().strip()
+    pi_key = f"{institution_key}|{pi_name.lower().strip()}"
+    
+    if institution_key in pi_details_cache and pi_key in pi_details_cache[institution_key]:
+        return pi_details_cache[institution_key][pi_key]
+    
+    return None
+
 app = FastAPI(
     title="NSF-Tracker Enhanced API",
     description="Enhanced funding analysis with optimized caching",
@@ -639,7 +720,8 @@ async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) 
             'department_losses': dict(sorted(nonrenewal_dept_losses.items(), key=lambda x: x[1], reverse=True)),
             'detailed_missing_renewals': missing_renewals[:10],  # Top 10 for review
             'analysis_period': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-            'methodology_note': 'Times-style non-renewal analysis: identifies grants eligible for renewal that show no evidence of renewal within expected timeframes'
+            'methodology_note': 'Times-style non-renewal analysis: identifies grants eligible for renewal that show no evidence of renewal within expected timeframes',
+            'nonrenewal_grants_by_pi': nonrenewal_grants_by_pi  # Raw PI data for caching
         }
         
     except Exception as e:
@@ -965,6 +1047,18 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
             },
             'methodology_note': 'Enhanced analysis with cancelled grants tracking based on fresh NIH Reporter and NSF Awards API data'
         }
+        
+        # Cache PI details for faster access on future requests
+        print(f"💾 Caching PI details for {institution_name}...")
+        try:
+            # Get the raw PI data from nonrenewal analysis
+            nonrenewal_grants_by_pi = nonrenewal_analysis.get('nonrenewal_grants_by_pi', {})
+            
+            # Cache both cancelled and nonrenewal PI data
+            cache_pi_details(institution_name, cancelled_grants_by_pi, nonrenewal_grants_by_pi)
+            print(f"✅ Cached details for {len(cancelled_grants_by_pi)} cancelled PIs and {len(nonrenewal_grants_by_pi)} nonrenewal PIs")
+        except Exception as e:
+            print(f"⚠️ Error caching PI details: {e}")
         
         return result
         
@@ -1926,12 +2020,36 @@ async def download_delayed_funding_csv(institution_name: str, method: str = "com
 async def get_pi_grant_details(institution_name: str, pi_name: str):
     """Get detailed grant information for a specific PI, including cancelled and non-renewed grants."""
     try:
-        # Get enhanced delayed funding analysis which includes PI-specific data
-        analysis_data = await get_comprehensive_delayed_funding_analysis(
-            institution_name=institution_name,
-            method="comprehensive",
-            include_departments=True
-        )
+        print(f"Fetching PI details for: {pi_name} at {institution_name}")
+        
+        # First, try to get from cache for better performance
+        cached_details = get_cached_pi_details(institution_name, pi_name)
+        if cached_details:
+            print(f"✅ Returning cached details for {pi_name}")
+            return {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "total_lost_funding": cached_details.get('total_lost_funding', 0),
+                "cancelled_grants": cached_details.get('cancelled_grants', []),
+                "nonrenewal_grants": cached_details.get('nonrenewal_grants', []),
+                "department": cached_details.get('department', 'Unknown'),
+                "summary": {
+                    "total_grants_affected": len(cached_details.get('cancelled_grants', [])) + len(cached_details.get('nonrenewal_grants', [])),
+                    "cancelled_count": len(cached_details.get('cancelled_grants', [])),
+                    "nonrenewal_count": len(cached_details.get('nonrenewal_grants', [])),
+                    "total_funding_lost": cached_details.get('total_lost_funding', 0)
+                },
+                "source": "cache",
+                "note": "Data served from cache for optimal performance"
+            }
+        
+        print(f"⚠️ No cached data found for {pi_name}, performing full analysis...")
+        
+        # Fallback to full analysis if no cache hit
+        # Get all grant data by running the same analysis that the delayed funding uses
+        all_grants = await fetch_comprehensive_institution_grants(institution_name)
+        
+        print(f"Total grants found: {len(all_grants)}")
         
         # Initialize PI details structure
         pi_details = {
@@ -1949,42 +2067,90 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
             }
         }
         
-        # Search through cancelled grants impact
-        if analysis_data.get('cancelled_grants_impact', {}).get('top_affected_pis'):
-            for pi_data in analysis_data['cancelled_grants_impact']['top_affected_pis']:
-                if pi_data.get('pi_name', '').strip().lower() == pi_name.strip().lower():
-                    pi_details["department"] = pi_data.get('department', 'Unknown')
-                    pi_details["cancelled_grants"] = pi_data.get('grants', [])
-                    pi_details["summary"]["cancelled_count"] = len(pi_details["cancelled_grants"])
-                    
-                    # Calculate cancelled funding total
-                    cancelled_funding = sum(grant.get('amount', 0) for grant in pi_details["cancelled_grants"])
-                    pi_details["total_lost_funding"] += cancelled_funding
-                    break
+        # Analyze the raw grants data to find PI-specific grants
+        pi_name_normalized = pi_name.strip().lower()
+        print(f"Looking for PI: '{pi_name_normalized}'")
         
-        # Search through non-renewal grants impact
-        if analysis_data.get('nonrenewal_grants_impact', {}).get('top_affected_pis'):
-            for pi_data in analysis_data['nonrenewal_grants_impact']['top_affected_pis']:
-                if pi_data.get('pi_name', '').strip().lower() == pi_name.strip().lower():
-                    if pi_details["department"] == "Unknown":
-                        pi_details["department"] = pi_data.get('department', 'Unknown')
-                    pi_details["nonrenewal_grants"] = pi_data.get('grants', [])
-                    pi_details["summary"]["nonrenewal_count"] = len(pi_details["nonrenewal_grants"])
-                    
-                    # Calculate non-renewal funding total
-                    nonrenewal_funding = sum(grant.get('amount', 0) for grant in pi_details["nonrenewal_grants"])
-                    pi_details["total_lost_funding"] += nonrenewal_funding
-                    break
+        # Search through all grants for this PI
+        found_grants = 0
+        for grant_data in all_grants:
+            grant_pi_name = (grant_data.get('contact_pi_name') or grant_data.get('pi_name') or grant_data.get('pdPIName') or '').strip().lower()
+            
+            if grant_pi_name == pi_name_normalized:
+                found_grants += 1
+                print(f"Found grant for PI: {grant_data.get('project_num') or grant_data.get('award_id')}")
+                
+                # Get department if we don't have it yet
+                if pi_details["department"] == "Unknown":
+                    try:
+                        from pi_department_lookup import get_department_string
+                        dept = get_department_string(grant_data.get('contact_pi_name') or grant_data.get('pi_name') or grant_data.get('pdPIName'), institution_name)
+                        if dept:
+                            pi_details["department"] = dept
+                    except:
+                        pass
+                
+                # Check if this is a cancelled/terminated grant
+                status = grant_data.get('award_status', '').lower()
+                is_cancelled = any(term in status for term in ['cancelled', 'terminated', 'suspend'])
+                
+                # Check if this is a non-renewal case (grant ended without renewal)
+                is_nonrenewal = False
+                end_date = grant_data.get('project_end_date') or grant_data.get('expDate')
+                if end_date and not is_cancelled:
+                    try:
+                        from datetime import datetime, timedelta
+                        if isinstance(end_date, str):
+                            # Handle various date formats
+                            if 'T' in end_date:
+                                end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                            else:
+                                end_date = datetime.strptime(end_date, '%Y-%m-%d')
+                        
+                        # Check if grant ended more than 6 months ago without renewal
+                        cutoff_date = datetime.now() - timedelta(days=180)
+                        if end_date < cutoff_date:
+                            is_nonrenewal = True
+                            print(f"Grant {grant_data.get('project_num')} marked as non-renewal (ended {end_date})")
+                    except Exception as e:
+                        print(f"Date parsing error: {e}")
+                        pass
+                
+                # Add grant to appropriate category
+                grant_details = {
+                    'award_id': grant_data.get('project_num') or grant_data.get('award_id') or grant_data.get('id'),
+                    'title': grant_data.get('project_title') or grant_data.get('title', ''),
+                    'abstract': grant_data.get('abstract_text') or grant_data.get('abstract', ''),
+                    'amount': grant_data.get('award_amount') or grant_data.get('total_cost') or grant_data.get('fundsObligatedAmt', 0),
+                    'fiscal_year': grant_data.get('fiscal_year'),
+                    'status': status or 'Unknown',
+                    'funding_agency': grant_data.get('funding_agency') or grant_data.get('agency', 'Unknown'),
+                    'start_date': grant_data.get('project_start_date') or grant_data.get('startDate'),
+                    'end_date': grant_data.get('project_end_date') or grant_data.get('expDate')
+                }
+                
+                if is_cancelled:
+                    pi_details["cancelled_grants"].append(grant_details)
+                    pi_details["total_lost_funding"] += grant_details["amount"]
+                    print(f"Added cancelled grant: {grant_details['award_id']}")
+                elif is_nonrenewal:
+                    pi_details["nonrenewal_grants"].append(grant_details)
+                    pi_details["total_lost_funding"] += grant_details["amount"]
+                    print(f"Added non-renewal grant: {grant_details['award_id']}")
         
-        # Update summary totals
+        print(f"Found {found_grants} total grants for PI {pi_name}")
+        
+        # Update summary counts
+        pi_details["summary"]["cancelled_count"] = len(pi_details["cancelled_grants"])
+        pi_details["summary"]["nonrenewal_count"] = len(pi_details["nonrenewal_grants"])
         pi_details["summary"]["total_grants_affected"] = (
             pi_details["summary"]["cancelled_count"] + pi_details["summary"]["nonrenewal_count"]
         )
         pi_details["summary"]["total_funding_lost"] = pi_details["total_lost_funding"]
         
         # Enhanced grant details with department classification
-        all_grants = pi_details["cancelled_grants"] + pi_details["nonrenewal_grants"]
-        for grant in all_grants:
+        all_grants_list = pi_details["cancelled_grants"] + pi_details["nonrenewal_grants"]
+        for grant in all_grants_list:
             # Add grant type for easy identification
             if grant in pi_details["cancelled_grants"]:
                 grant["grant_type"] = "cancelled"
@@ -2010,13 +2176,53 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 "pi_name": pi_name,
                 "institution": institution_name,
                 "message": "No cancelled or non-renewed grants found for this PI",
-                "summary": pi_details["summary"]
+                "summary": pi_details["summary"],
+                "debug_info": f"Found {found_grants} total grants for PI, but none were cancelled or non-renewed"
             }
         
+        print(f"Returning {pi_details['summary']['total_grants_affected']} grants for {pi_name}")
         return pi_details
         
     except Exception as e:
+        print(f"Error getting PI grant details: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error getting PI grant details: {str(e)}")
+
+@app.get("/api/debug-pis/{institution_name}")
+async def debug_pis(institution_name: str):
+    """Debug endpoint to see what PI names are in the raw grant data."""
+    try:
+        # Get all grant data
+        all_grants = await fetch_comprehensive_institution_grants(institution_name)
+        
+        # Get unique PI names
+        pi_names = set()
+        for grant in all_grants:
+            pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or grant.get('pdPIName') or '').strip()
+            if pi_name:
+                pi_names.add(pi_name)
+        
+        # Look for our target PIs
+        target_pis = ["NEAME, SIMON", "BERNDT, ANDRE", "FAIRHALL, ADRIENNE L"]
+        found_pis = []
+        for target in target_pis:
+            matches = [pi for pi in pi_names if target.lower() in pi.lower()]
+            found_pis.append({
+                "target": target,
+                "matches": matches,
+                "exact_match": target in pi_names
+            })
+        
+        return {
+            "total_grants": len(all_grants),
+            "total_unique_pis": len(pi_names),
+            "target_pi_analysis": found_pis,
+            "sample_pi_names": sorted(list(pi_names))[:20]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

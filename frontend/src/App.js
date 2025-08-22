@@ -205,7 +205,12 @@ function App() {
       setPiDetailsLoading(true);
       setError(null);
       
-      const response = await axios.get(`/api/pi-grant-details/${encodeURIComponent(institutionName)}/${encodeURIComponent(piName)}`);
+      // Get the institution name properly - it might be an object or string
+      const institutionNameStr = typeof institutionName === 'string' ? institutionName : institutionName?.institution || selectedInstitution?.institution || 'Unknown';
+      
+      console.log('Fetching PI details for:', piName, 'at', institutionNameStr);
+      const response = await axios.get(`/api/pi-grant-details/${encodeURIComponent(institutionNameStr)}/${encodeURIComponent(piName)}`);
+      console.log('PI details response:', response.data);
       setPiDetails(response.data);
       setSelectedPi(piName);
       setShowPiModal(true);
@@ -819,7 +824,7 @@ function App() {
                           cursor: 'pointer',
                           transition: 'background-color 0.2s'
                         }}
-                        onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                        onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution?.institution || 'Unknown')}
                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                         >
@@ -954,7 +959,7 @@ function App() {
                               cursor: 'pointer',
                               transition: 'background-color 0.2s'
                             }}
-                            onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                            onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution?.institution || 'Unknown')}
                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                             >
@@ -1242,7 +1247,7 @@ function App() {
                       cursor: 'pointer',
                       transition: 'background-color 0.2s'
                     }}
-                    onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                    onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution?.institution || 'Unknown')}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
@@ -1359,7 +1364,7 @@ function App() {
                       cursor: 'pointer',
                       transition: 'background-color 0.2s'
                     }}
-                    onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution)}
+                    onClick={() => fetchPiDetails(pi.pi_name, selectedInstitution?.institution || 'Unknown')}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     >
@@ -1791,6 +1796,226 @@ function App() {
             <strong>Data Sources:</strong> USASpending.gov for comprehensive funding totals, NIH RePORTER + NSF Awards for research-specific risk analysis.
           </div>
         </>
+      )}
+
+      {/* PI Details Modal */}
+      {showPiModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '10px',
+            maxWidth: '900px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            padding: '30px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
+          }}>
+            {/* Modal Header */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: '20px',
+              borderBottom: '2px solid #f0f0f0',
+              paddingBottom: '15px'
+            }}>
+              <div>
+                <h2 style={{ margin: 0, color: '#1976d2' }}>{selectedPi}</h2>
+                <p style={{ margin: '5px 0 0 0', color: '#666' }}>
+                  {typeof selectedInstitution === 'string' ? selectedInstitution : selectedInstitution?.institution || 'Unknown Institution'}
+                </p>
+              </div>
+              <button 
+                onClick={closePiModal}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: '5px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Loading State */}
+            {piDetailsLoading && (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div>Loading PI details...</div>
+              </div>
+            )}
+
+            {/* PI Details Content */}
+            {!piDetailsLoading && piDetails && (
+              <div>
+                {/* Debug info - remove this after testing */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div style={{ background: '#f0f0f0', padding: '10px', marginBottom: '10px', fontSize: '12px' }}>
+                    Debug: {JSON.stringify(piDetails, null, 2).substring(0, 200)}...
+                  </div>
+                )}
+                
+                {/* Summary */}
+                <div style={{
+                  backgroundColor: '#f8f9fa',
+                  padding: '20px',
+                  borderRadius: '8px',
+                  marginBottom: '25px'
+                }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>Summary</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Department</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{String(piDetails.department || 'Unknown')}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Funding Lost</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>
+                        {formatCurrency(piDetails.total_lost_funding || 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Affected Grants</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{String(piDetails.summary?.total_grants_affected || 0)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Cancelled</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#d32f2f' }}>{String(piDetails.summary?.cancelled_count || 0)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Non-Renewed</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f57c00' }}>{String(piDetails.summary?.nonrenewal_count || 0)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cancelled Grants */}
+                {piDetails.cancelled_grants && piDetails.cancelled_grants.length > 0 && (
+                  <div style={{ marginBottom: '25px' }}>
+                    <h3 style={{ color: '#d32f2f', marginBottom: '15px' }}>
+                      Cancelled/Terminated Grants ({piDetails.cancelled_grants.length})
+                    </h3>
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {piDetails.cancelled_grants.map((grant, index) => (
+                        <div key={index} style={{
+                          border: '1px solid #ffcdd2',
+                          borderRadius: '6px',
+                          padding: '15px',
+                          backgroundColor: '#fff'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 'bold', color: '#333', marginBottom: '4px' }}>
+                                {String(grant.title || 'Grant Title Not Available')}
+                              </div>
+                              <div style={{ fontSize: '14px', color: '#666' }}>
+                                Award ID: {String(grant.award_id || grant.project_num || 'N/A')}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 'bold', color: '#d32f2f', fontSize: '16px' }}>
+                                {formatCurrency(grant.amount || 0)}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#666' }}>
+                                {grant.fiscal_year ? `FY ${String(grant.fiscal_year)}` : ''}
+                              </div>
+                            </div>
+                          </div>
+                          {grant.abstract && (
+                            <div style={{ fontSize: '13px', color: '#555', lineHeight: '1.4', marginTop: '8px' }}>
+                              {String(grant.abstract).length > 200 ? `${String(grant.abstract).substring(0, 200)}...` : String(grant.abstract)}
+                            </div>
+                          )}
+                          {grant.predicted_department && grant.predicted_department !== piDetails.department && (
+                            <div style={{ fontSize: '12px', color: '#1976d2', marginTop: '6px' }}>
+                              Enhanced Classification: {String(grant.predicted_department)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Non-Renewal Grants */}
+                {piDetails.nonrenewal_grants && piDetails.nonrenewal_grants.length > 0 && (
+                  <div style={{ marginBottom: '25px' }}>
+                    <h3 style={{ color: '#f57c00', marginBottom: '15px' }}>
+                      Non-Renewed Grants ({piDetails.nonrenewal_grants.length})
+                    </h3>
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {piDetails.nonrenewal_grants.map((grant, index) => (
+                        <div key={index} style={{
+                          border: '1px solid #ffcc02',
+                          borderRadius: '6px',
+                          padding: '15px',
+                          backgroundColor: '#fff'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 'bold', color: '#333', marginBottom: '4px' }}>
+                                {String(grant.title || 'Grant Title Not Available')}
+                              </div>
+                              <div style={{ fontSize: '14px', color: '#666' }}>
+                                Award ID: {String(grant.award_id || grant.project_num || 'N/A')}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 'bold', color: '#f57c00', fontSize: '16px' }}>
+                                {formatCurrency(grant.amount || 0)}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#666' }}>
+                                {grant.fiscal_year ? `FY ${String(grant.fiscal_year)}` : ''}
+                              </div>
+                            </div>
+                          </div>
+                          {grant.abstract && (
+                            <div style={{ fontSize: '13px', color: '#555', lineHeight: '1.4', marginTop: '8px' }}>
+                              {String(grant.abstract).length > 200 ? `${String(grant.abstract).substring(0, 200)}...` : String(grant.abstract)}
+                            </div>
+                          )}
+                          {grant.predicted_department && grant.predicted_department !== piDetails.department && (
+                            <div style={{ fontSize: '12px', color: '#1976d2', marginTop: '6px' }}>
+                              Enhanced Classification: {String(grant.predicted_department)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No grants message */}
+                {piDetails.summary.total_grants_affected === 0 && (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '40px',
+                    color: '#666',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '8px'
+                  }}>
+                    {piDetails.message || "No cancelled or non-renewed grants found for this PI"}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
