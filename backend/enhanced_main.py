@@ -270,7 +270,15 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
             institution_name.upper(),
             institution_name.replace("University of", "").strip(),
             institution_name.replace("University", "Univ").strip(),
-            institution_name.replace(",", "").strip()
+            institution_name.replace(",", "").strip(),
+            # Additional variations for better coverage
+            institution_name.replace("University of", "Univ of").strip(),
+            institution_name.replace("State University", "State Univ").strip(),
+            institution_name.replace(" University", "").strip(),
+            institution_name.replace("The ", "").strip(),
+            # Handle common abbreviations
+            institution_name.replace(" and ", " & ").strip(),
+            institution_name.replace("&", "and").strip()
         ]
         
         # Remove duplicates while preserving order
@@ -283,14 +291,14 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
         
         print(f"🔍 Searching with institution variations: {unique_variations}")
         
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:  # Reduced timeout from 120 to 60
             # NIH search strategies
             nih_strategies = [
-                # Strategy 1: Recent grants (last 5 years, all statuses)
+                # Strategy 1: Recent grants (focused on last 3 years for speed)
                 {
                     "criteria": {
                         "organization_names": unique_variations,
-                        "fiscal_years": [2020, 2021, 2022, 2023, 2024, 2025]
+                        "fiscal_years": [2022, 2023, 2024, 2025]  # Reduced to recent years
                     },
                     "include_fields": [
                         "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
@@ -299,26 +307,12 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
                     ],
                     "limit": 500
                 },
-                # Strategy 2: Broader time range with higher amounts
+                # Strategy 2: Substantial grants (for major funding identification)
                 {
                     "criteria": {
                         "organization_names": unique_variations,
-                        "award_amount_low": 100000,  # Focus on substantial grants
-                        "fiscal_years": [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
-                    },
-                    "include_fields": [
-                        "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
-                        "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
-                        "ActivityCode", "FullStudySection"
-                    ],
-                    "limit": 500
-                },
-                # Strategy 3: Search by DUNS/UEI if available
-                {
-                    "criteria": {
-                        "organization_names": unique_variations,
-                        "project_types": ["RESEARCH", "TRAINING", "CAREER", "OTHER_RESEARCH"],
-                        "fiscal_years": [2019, 2020, 2021, 2022, 2023, 2024, 2025]
+                        "award_amount_low": 100000,  # Focus on substantial grants only
+                        "fiscal_years": [2020, 2021, 2022, 2023, 2024, 2025]  # Slightly broader for major grants
                     },
                     "include_fields": [
                         "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
@@ -338,7 +332,7 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
                     batch_size = 500
                     strategy_grants = []
                     
-                    while len(strategy_grants) < 2000:  # Max 2000 per strategy
+                    while len(strategy_grants) < 1500:  # Reduced from 3000 to 1500 per strategy
                         search_criteria["offset"] = offset
                         search_criteria["limit"] = batch_size
                         
@@ -374,6 +368,11 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
                         
                         if len(results) < batch_size:
                             break
+                        
+                        # Early termination if we have enough data
+                        if len(all_grants) + len(strategy_grants) > max_grants // 2:
+                            print(f"  ⏰ Early termination: sufficient data collected")
+                            break
                     
                     all_grants.extend(strategy_grants)
                     print(f"✅ NIH Strategy {strategy_num}: Found {len(strategy_grants)} grants")
@@ -382,64 +381,67 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
                     print(f"⚠️ NIH Strategy {strategy_num} failed: {e}")
                     continue
             
-            # NSF API search
-            print("🧪 Fetching NSF grants...")
-            nsf_url = "https://api.nsf.gov/services/v1/awards.json"
-            
-            try:
-                nsf_params = {
-                    'printFields': 'id,title,startDate,expDate,fundsObligatedAmt,awardeeName,pdPIName,agency,fundProgramName',
-                    'rpp': '500',
-                    'awardeeName': institution_name
-                }
+            # NSF API search - use updated endpoint (skip if we already have enough grants)
+            if len(all_grants) < max_grants * 0.8:  # Only fetch NSF if we need more data
+                print("🧪 Fetching NSF grants...")
+                nsf_url = "https://www.research.gov/awardapi-service/v1/awards.json"  # Updated endpoint
                 
-                # Paginate through NSF results
-                offset = 1
-                nsf_grants = []
-                
-                while len(nsf_grants) < 2000:  # Max 2000 NSF grants
-                    nsf_params['offset'] = str(offset)
+                try:
+                    nsf_params = {
+                        'printFields': 'id,title,startDate,expDate,fundsObligatedAmt,awardeeName,pdPIName,agency,fundProgramName',
+                        'rpp': '500',
+                        'awardeeName': institution_name
+                    }
                     
-                    response = await client.get(nsf_url, params=nsf_params)
-                    response.raise_for_status()
-                    data = response.json()
+                    # Paginate through NSF results
+                    offset = 1
+                    nsf_grants = []
                     
-                    awards = data.get('response', {}).get('award', [])
-                    if not awards:
-                        break
+                    while len(nsf_grants) < 1000:  # Reduced from 3000 to 1000 NSF grants
+                        nsf_params['offset'] = str(offset)
+                        
+                        response = await client.get(nsf_url, params=nsf_params)
+                        response.raise_for_status()
+                        data = response.json()
+                        
+                        awards = data.get('response', {}).get('award', [])
+                        if not awards:
+                            break
+                        
+                        # Process NSF grants
+                        for award in awards:
+                            processed_grant = {
+                                'fiscal_year': None,  # NSF doesn't use fiscal years the same way
+                                'project_num': award.get('id'),
+                                'organization': {
+                                    'org_name': award.get('awardeeName'),
+                                    'org_state': award.get('awardeeStateCode'),
+                                    'org_city': award.get('awardeeCity')
+                                },
+                                'activity_code': 'NSF',
+                                'award_amount': award.get('fundsObligatedAmt', 0),
+                                'contact_pi_name': award.get('pdPIName'),
+                                'project_start_date': award.get('startDate'),
+                                'project_end_date': award.get('expDate'),
+                                'project_title': award.get('title'),
+                                'funding_agency': 'NSF',
+                                'source': 'NSF_comprehensive_search'
+                            }
+                            nsf_grants.append(processed_grant)
+                        
+                        print(f"  📥 NSF Batch {offset//500 + 1}: +{len(awards)} grants (total: {len(nsf_grants)})")
+                        offset += 500
+                        
+                        if len(awards) < 500:
+                            break
                     
-                    # Process NSF grants
-                    for award in awards:
-                        processed_grant = {
-                            'fiscal_year': None,  # NSF doesn't use fiscal years the same way
-                            'project_num': award.get('id'),
-                            'organization': {
-                                'org_name': award.get('awardeeName'),
-                                'org_state': award.get('awardeeStateCode'),
-                                'org_city': award.get('awardeeCity')
-                            },
-                            'activity_code': 'NSF',
-                            'award_amount': award.get('fundsObligatedAmt', 0),
-                            'contact_pi_name': award.get('pdPIName'),
-                            'project_start_date': award.get('startDate'),
-                            'project_end_date': award.get('expDate'),
-                            'project_title': award.get('title'),
-                            'funding_agency': 'NSF',
-                            'source': 'NSF_comprehensive_search'
-                        }
-                        nsf_grants.append(processed_grant)
+                    all_grants.extend(nsf_grants)
+                    print(f"✅ NSF: Found {len(nsf_grants)} grants")
                     
-                    print(f"  📥 NSF Batch {offset//500 + 1}: +{len(awards)} grants (total: {len(nsf_grants)})")
-                    offset += 500
-                    
-                    if len(awards) < 500:
-                        break
-                
-                all_grants.extend(nsf_grants)
-                print(f"✅ NSF: Found {len(nsf_grants)} grants")
-                
-            except Exception as e:
-                print(f"⚠️ NSF search failed: {e}")
+                except Exception as e:
+                    print(f"⚠️ NSF search failed: {e}")
+            else:
+                print(f"⏩ Skipping NSF search - already have {len(all_grants)} grants")
         
         # Remove duplicates based on project_num/id
         seen_projects = set()
@@ -1548,7 +1550,7 @@ async def get_university_details(institution_name: str):
         # Strategy 2: Direct comprehensive API fetch for this specific institution
         print(f"🔍 Fetching comprehensive grants directly for {institution_name}...")
         try:
-            fresh_institution_grants = await fetch_comprehensive_institution_grants(institution_name, max_grants=15000)
+            fresh_institution_grants = await fetch_comprehensive_institution_grants(institution_name, max_grants=12000)
             if fresh_institution_grants:
                 print(f"✅ Found {len(fresh_institution_grants)} additional grants from direct API fetch")
                 
