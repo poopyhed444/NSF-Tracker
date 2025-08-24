@@ -2045,10 +2045,94 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 "note": "Data served from cache for optimal performance"
             }
         
-        print(f"⚠️ No cached data found for {pi_name}, performing full analysis...")
+        print(f"⚠️ No cached data found for {pi_name}, performing comprehensive analysis...")
         
-        # Fallback to full analysis if no cache hit
-        # Get all grant data by running the same analysis that the delayed funding uses
+        # If no cache hit, we need to run the full institution analysis to get proper PI data
+        # This ensures we use the same sophisticated non-renewal detection as the main analysis
+        try:
+            # Fetch comprehensive grants for the institution
+            all_grants = await fetch_comprehensive_institution_grants(institution_name)
+            print(f"Total grants found: {len(all_grants)}")
+            
+            if not all_grants:
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "message": "No grants found for this institution",
+                    "summary": {
+                        "total_grants_affected": 0,
+                        "cancelled_count": 0,
+                        "nonrenewal_count": 0,
+                        "total_funding_lost": 0
+                    }
+                }
+            
+            # Run the same comprehensive analysis as the main delayed funding endpoint
+            analysis_result = await analyze_fresh_nih_nsf_data(institution_name, all_grants)
+            
+            if not analysis_result or 'error' in analysis_result:
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "message": "Analysis failed for this institution",
+                    "error": analysis_result.get('error', 'Unknown error'),
+                    "summary": {
+                        "total_grants_affected": 0,
+                        "cancelled_count": 0,
+                        "nonrenewal_count": 0,
+                        "total_funding_lost": 0
+                    }
+                }
+            
+            # Now check if we have cached data after the analysis (it should be populated)
+            cached_details_after_analysis = get_cached_pi_details(institution_name, pi_name)
+            if cached_details_after_analysis:
+                print(f"✅ Found PI data in cache after analysis")
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "total_lost_funding": cached_details_after_analysis.get('total_lost_funding', 0),
+                    "cancelled_grants": cached_details_after_analysis.get('cancelled_grants', []),
+                    "nonrenewal_grants": cached_details_after_analysis.get('nonrenewal_grants', []),
+                    "department": cached_details_after_analysis.get('department', 'Unknown'),
+                    "summary": {
+                        "total_grants_affected": len(cached_details_after_analysis.get('cancelled_grants', [])) + len(cached_details_after_analysis.get('nonrenewal_grants', [])),
+                        "cancelled_count": len(cached_details_after_analysis.get('cancelled_grants', [])),
+                        "nonrenewal_count": len(cached_details_after_analysis.get('nonrenewal_grants', [])),
+                        "total_funding_lost": cached_details_after_analysis.get('total_lost_funding', 0)
+                    },
+                    "source": "comprehensive_analysis",
+                    "note": "Generated from comprehensive institutional analysis"
+                }
+            
+            # If still no cache data, the PI might not have any cancelled/non-renewal grants
+            return {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "message": "No cancelled or non-renewed grants found for this PI after comprehensive analysis",
+                "summary": {
+                    "total_grants_affected": 0,
+                    "cancelled_count": 0,
+                    "nonrenewal_count": 0,
+                    "total_funding_lost": 0
+                },
+                "source": "comprehensive_analysis",
+                "note": "PI analyzed but no problematic grants found"
+            }
+            
+        except Exception as e:
+            print(f"Error in comprehensive analysis: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback to the old simple logic only if comprehensive analysis fails
+            print(f"⚠️ Falling back to simple grant analysis...")
+        
+        # EMERGENCY FALLBACK ONLY: Simple analysis (less sophisticated than main analysis)
+        # WARNING: This uses simplified non-renewal detection (6-month cutoff) 
+        # instead of the sophisticated EnhancedDelayedFundingTracker methodology
+        print("⚠️ Using emergency fallback with simplified methodology...")
+        
         all_grants = await fetch_comprehensive_institution_grants(institution_name)
         
         print(f"Total grants found: {len(all_grants)}")
@@ -2066,7 +2150,9 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 "cancelled_count": 0,
                 "nonrenewal_count": 0,
                 "total_funding_lost": 0
-            }
+            },
+            "source": "emergency_fallback",
+            "warning": "Using simplified analysis methodology - may differ from main analysis results"
         }
         
         # Analyze the raw grants data to find PI-specific grants
