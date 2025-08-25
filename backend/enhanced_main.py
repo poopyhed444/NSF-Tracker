@@ -94,6 +94,21 @@ def get_cached_pi_details(institution_name: str, pi_name: str):
     institution_key = institution_name.lower().strip()
     pi_key = f"{institution_key}|{pi_name.lower().strip()}"
     
+    # DEBUG: Always show what's in cache when looking for a specific PI
+    print(f"🔍 Looking for PI: {pi_name} (key: {pi_key})")
+    if institution_key in pi_details_cache:
+        cached_pis = list(pi_details_cache[institution_key].keys())
+        print(f"🔍 Found {len(cached_pis)} PIs in cache for {institution_name}:")
+        for cached_pi in cached_pis:
+            # Extract just the PI name part (after the |)
+            if '|' in cached_pi:
+                pi_name_only = cached_pi.split('|', 1)[1]
+                print(f"  - {pi_name_only}")
+            else:
+                print(f"  - {cached_pi}")
+    else:
+        print(f"🔍 No cache entry found for institution {institution_name}")
+    
     if institution_key in pi_details_cache and pi_key in pi_details_cache[institution_key]:
         return pi_details_cache[institution_key][pi_key]
     
@@ -681,7 +696,8 @@ async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) 
                         nonrenewal_grants_by_pi[pi_name]['lost_funding'] += amount
                         nonrenewal_grants_by_pi[pi_name]['grants'].append({
                             'award_id': grant.get('project_num') or grant.get('award_id'),
-                            'project_title': grant.get('project_title', ''),
+                            'title': grant.get('project_title', ''),  # Frontend expects 'title', not 'project_title'
+                            'abstract': grant.get('abstract', grant.get('project_abstract', '')),  # Add abstract for frontend
                             'amount': amount,
                             'expected_renewal': expected_renewal_date.isoformat(),
                             'days_overdue': (datetime.now() - expected_renewal_date).days,
@@ -867,7 +883,8 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                             cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
                             cancelled_grants_by_pi[pi_name]['grants'].append({
                                 'award_id': grant.get('project_num') or grant.get('award_id'),
-                                'project_title': grant.get('project_title', ''),
+                                'title': grant.get('project_title', ''),  # Frontend expects 'title', not 'project_title'
+                                'abstract': grant.get('abstract', grant.get('project_abstract', '')),  # Add abstract for frontend
                                 'amount': amount,
                                 'status': grant.get('award_status', 'Unknown'),
                                 'end_date': grant.get('project_end_date'),
@@ -2045,14 +2062,79 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 "note": "Data served from cache for optimal performance"
             }
         
-        print(f"⚠️ No cached data found for {pi_name}, performing comprehensive analysis...")
+        print(f"⚠️ No cached data found for {pi_name}, checking main analysis cache...")
         
-        # If no cache hit, we need to run the full institution analysis to get proper PI data
+        # DEBUG: Show what PIs are actually in the cache
+        global pi_details_cache
+        institution_key = institution_name.lower().strip()
+        if institution_key in pi_details_cache:
+            cached_pis = list(pi_details_cache[institution_key].keys())
+            print(f"🔍 DEBUG: Found {len(cached_pis)} PIs in cache for {institution_name}:")
+            for cached_pi in cached_pis:
+                # Extract just the PI name part (after the |)
+                if '|' in cached_pi:
+                    pi_name_only = cached_pi.split('|', 1)[1]
+                    print(f"  - {pi_name_only}")
+                else:
+                    print(f"  - {cached_pi}")
+        else:
+            print(f"🔍 DEBUG: No cache entry found for institution {institution_name} (key: {institution_key})")
+        
+        # First, check if we have cached results from the main comprehensive analysis
+        # This avoids running duplicate analysis and ensures consistency
+        main_analysis_cache = get_cached_analysis(institution_name, "comprehensive", True)
+        
+        if main_analysis_cache:
+            print(f"✅ Found main analysis cache for {institution_name}, checking for PI data...")
+            # The main analysis should have populated the PI cache
+            cached_details_from_main = get_cached_pi_details(institution_name, pi_name)
+            if cached_details_from_main:
+                print(f"✅ Found {pi_name} in main analysis cache")
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "total_lost_funding": cached_details_from_main.get('total_lost_funding', 0),
+                    "cancelled_grants": cached_details_from_main.get('cancelled_grants', []),
+                    "nonrenewal_grants": cached_details_from_main.get('nonrenewal_grants', []),
+                    "department": cached_details_from_main.get('department', 'Unknown'),
+                    "summary": {
+                        "total_grants_affected": len(cached_details_from_main.get('cancelled_grants', [])) + len(cached_details_from_main.get('nonrenewal_grants', [])),
+                        "cancelled_count": len(cached_details_from_main.get('cancelled_grants', [])),
+                        "nonrenewal_count": len(cached_details_from_main.get('nonrenewal_grants', [])),
+                        "total_funding_lost": cached_details_from_main.get('total_lost_funding', 0)
+                    },
+                    "source": "main_analysis_cache",
+                    "note": "Data served from main comprehensive analysis cache"
+                }
+            else:
+                print(f"ℹ️ Main analysis exists but {pi_name} not found - PI may have no cancelled/non-renewal grants")
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "message": "PI analyzed in main comprehensive analysis but no cancelled or non-renewed grants found",
+                    "summary": {
+                        "total_grants_affected": 0,
+                        "cancelled_count": 0,
+                        "nonrenewal_count": 0,
+                        "total_funding_lost": 0
+                    },
+                    "source": "main_analysis_cache",
+                    "note": "PI has no problematic grants according to comprehensive analysis"
+                }
+        
+        print(f"⚠️ No main analysis cache found, running fresh comprehensive analysis...")
+        
+        # If no main analysis cache exists, we need to run the full institution analysis to get proper PI data
         # This ensures we use the same sophisticated non-renewal detection as the main analysis
         try:
-            # Fetch comprehensive grants for the institution
-            all_grants = await fetch_comprehensive_institution_grants(institution_name)
-            print(f"Total grants found: {len(all_grants)}")
+            # Fetch comprehensive grants for the institution (both active and terminated)
+            print(f"🔍 Fetching both active and terminated grants for {institution_name}...")
+            active_grants = await fetch_comprehensive_institution_grants(institution_name)
+            terminated_grants = await fetch_additional_terminated_grants(institution_name)
+            
+            # Combine both active and terminated grants for complete analysis
+            all_grants = active_grants + terminated_grants
+            print(f"Total grants found: {len(all_grants)} (active: {len(active_grants)}, terminated: {len(terminated_grants)})")
             
             if not all_grants:
                 return {

@@ -850,7 +850,7 @@ def get_pi_department_sync(name: str, institution: str, force_refresh: bool = Fa
         }
         
         # Cache the result
-        _cache.set(name, institution, result)
+        _cache.set(name, institution, dept, source, confidence)
         
         return result
         
