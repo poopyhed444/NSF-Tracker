@@ -1,0 +1,80 @@
+{
+  "aafjes marc|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.528839"
+  },
+  "abadir peter|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.535904"
+  },
+  "abbott geoffrey|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.556487"
+  },
+  "abdelaziz may|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.570795"
+  },
+  "abranches jacqueline|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.671744"
+  },
+  "adams andrew|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.766636"
+  },
+  "abul-husn noura|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T22:47:44.805556"
+  },
+  "abazeed mohamed|university of chicago": {
+    "department": "Medicine",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-08-24T23:04:13.652767"
+  },
+  "ackermann ronald|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T23:04:13.656704"
+  },
+  "acosta ana|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T23:04:13.692086"
+  },
+  "adams carlton|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T23:04:13.707573"
+  },
+  "adams erin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T23:04:13.742987"
+  },
+  "adegunsoye ayodeji|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-24T23:04:13.805046"
+  }
+}
