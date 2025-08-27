@@ -76,5 +76,29 @@
     "source": "heuristic",
     "confidence": "low",
     "timestamp": "2025-08-24T23:04:13.805046"
+  },
+  "amieva manuel|stanford university": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-26T23:47:56.760302"
+  },
+  "andrews jason|stanford university": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-26T23:47:56.781853"
+  },
+  "au david|stanford university": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-26T23:47:56.827395"
+  },
+  "axelrod jeffrey|stanford university": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-26T23:47:56.844976"
   }
 }

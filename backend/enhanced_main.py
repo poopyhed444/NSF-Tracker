@@ -114,6 +114,55 @@ def get_cached_pi_details(institution_name: str, pi_name: str):
     
     return None
 
+def validate_grant_institution_match(grant, target_institution: str) -> bool:
+    """
+    Validate that a grant actually belongs to the target institution.
+    This prevents false matches from overly broad search terms.
+    """
+    grant_org = grant.get('organization', {})
+    if isinstance(grant_org, dict):
+        org_name = grant_org.get('org_name', '').upper()
+    else:
+        org_name = str(grant_org).upper()
+    
+    target_upper = target_institution.upper()
+    
+    # Define key terms that must be present for a match
+    target_keywords = []
+    if 'STANFORD' in target_upper:
+        target_keywords = ['STANFORD', 'UNIVERSITY']
+    elif 'HARVARD' in target_upper:
+        target_keywords = ['HARVARD', 'UNIVERSITY']
+    elif 'MIT' in target_upper:
+        target_keywords = ['MIT', 'MASSACHUSETTS', 'INSTITUTE', 'TECHNOLOGY']
+    elif 'YALE' in target_upper:
+        target_keywords = ['YALE', 'UNIVERSITY']
+    elif 'PRINCETON' in target_upper:
+        target_keywords = ['PRINCETON', 'UNIVERSITY']
+    elif 'CHICAGO' in target_upper and 'UNIVERSITY' in target_upper:
+        target_keywords = ['CHICAGO', 'UNIVERSITY']
+    else:
+        # For other institutions, split the name and require most words to match
+        words = target_upper.split()
+        target_keywords = [word for word in words if len(word) > 3]  # Skip short words like "OF", "THE"
+    
+    # Require that most key terms are present in the organization name
+    if target_keywords:
+        matches = sum(1 for keyword in target_keywords if keyword in org_name)
+        match_ratio = matches / len(target_keywords)
+        
+        # Require at least 80% of key terms to match for large institutions
+        required_ratio = 0.8 if len(target_keywords) > 1 else 1.0
+        
+        is_valid_match = match_ratio >= required_ratio
+        
+        if not is_valid_match:
+            print(f"⚠️ Institution mismatch: '{org_name}' doesn't match '{target_institution}' (ratio: {match_ratio:.2f})")
+        
+        return is_valid_match
+    
+    return False
+
 app = FastAPI(
     title="NSF-Tracker Enhanced API",
     description="Enhanced funding analysis with optimized caching",
@@ -264,92 +313,48 @@ async def fetch_additional_terminated_grants(institution_name: str) -> List[Dict
         print(f"❌ Failed to fetch comprehensive terminated grants: {e}")
         return []
 
-async def fetch_comprehensive_institution_grants(institution_name: str, max_grants: int = 10000) -> List[Dict[str, Any]]:
+async def scrape_all_grants_and_filter(institution_name: str, max_grants: int = 5000) -> List[Dict[str, Any]]:
     """
-    Fetch comprehensive grants for an institution using multiple API strategies
+    Scrape ALL grants from recent years and filter for the target institution locally.
+    This bypasses the broken NIH search API.
     """
     try:
         import httpx
         from datetime import datetime, timedelta
         
-        print(f"🔍 Fetching comprehensive grants for {institution_name} (up to {max_grants} grants)...")
+        print(f"🌐 Scraping ALL recent grants and filtering for {institution_name}...")
         
-        all_grants = []
+        all_raw_grants = []
+        matched_grants = []
         
-        # NIH API - Multiple search strategies
+        # NIH API - scrape by fiscal year (more reliable than institution search)
         nih_url = "https://api.reporter.nih.gov/v2/projects/search"
         
-        # Create institution name variations for better matching
-        institution_variations = [
-            institution_name,
-            institution_name.upper(),
-            institution_name.replace("University of", "").strip(),
-            institution_name.replace("University", "Univ").strip(),
-            institution_name.replace(",", "").strip(),
-            # Additional variations for better coverage
-            institution_name.replace("University of", "Univ of").strip(),
-            institution_name.replace("State University", "State Univ").strip(),
-            institution_name.replace(" University", "").strip(),
-            institution_name.replace("The ", "").strip(),
-            # Handle common abbreviations
-            institution_name.replace(" and ", " & ").strip(),
-            institution_name.replace("&", "and").strip()
-        ]
+        # Scrape grants from recent years
+        fiscal_years = [2022, 2023, 2024, 2025]
         
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_variations = []
-        for var in institution_variations:
-            if var.lower() not in seen and var.strip():
-                seen.add(var.lower())
-                unique_variations.append(var)
-        
-        print(f"🔍 Searching with institution variations: {unique_variations}")
-        
-        async with httpx.AsyncClient(timeout=60.0) as client:  # Reduced timeout from 120 to 60
-            # NIH search strategies
-            nih_strategies = [
-                # Strategy 1: Recent grants (focused on last 3 years for speed)
-                {
-                    "criteria": {
-                        "organization_names": unique_variations,
-                        "fiscal_years": [2022, 2023, 2024, 2025]  # Reduced to recent years
-                    },
-                    "include_fields": [
-                        "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
-                        "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
-                        "ActivityCode", "FullStudySection"
-                    ],
-                    "limit": 500
-                },
-                # Strategy 2: Substantial grants (for major funding identification)
-                {
-                    "criteria": {
-                        "organization_names": unique_variations,
-                        "award_amount_low": 100000,  # Focus on substantial grants only
-                        "fiscal_years": [2020, 2021, 2022, 2023, 2024, 2025]  # Slightly broader for major grants
-                    },
-                    "include_fields": [
-                        "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
-                        "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
-                        "ActivityCode", "FullStudySection"
-                    ],
-                    "limit": 500
-                }
-            ]
-            
-            for strategy_num, search_criteria in enumerate(nih_strategies, 1):
-                try:
-                    print(f"📋 NIH Strategy {strategy_num}: Searching...")
-                    
-                    # Paginate through results
-                    offset = 0
-                    batch_size = 500
-                    strategy_grants = []
-                    
-                    while len(strategy_grants) < 1500:  # Reduced from 3000 to 1500 per strategy
-                        search_criteria["offset"] = offset
-                        search_criteria["limit"] = batch_size
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for year in fiscal_years:
+                print(f"📅 Scraping grants for fiscal year {year}...")
+                
+                offset = 0
+                batch_size = 500
+                year_grants = 0
+                
+                while year_grants < max_grants // len(fiscal_years):  # Distribute across years
+                    try:
+                        search_criteria = {
+                            "criteria": {
+                                "fiscal_years": [year]
+                            },
+                            "include_fields": [
+                                "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                                "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
+                                "ActivityCode", "FullStudySection"
+                            ],
+                            "offset": offset,
+                            "limit": batch_size
+                        }
                         
                         response = await client.post(nih_url, json=search_criteria)
                         response.raise_for_status()
@@ -359,123 +364,71 @@ async def fetch_comprehensive_institution_grants(institution_name: str, max_gran
                         if not results:
                             break
                         
-                        # Process and standardize grants
+                        # Filter grants locally for our target institution
+                        valid_grants_this_batch = 0
                         for grant in results:
-                            processed_grant = {
-                                'fiscal_year': grant.get('fiscal_year'),
-                                'project_num': grant.get('project_num'),
-                                'organization': grant.get('organization', {}),
-                                'activity_code': grant.get('activity_code'),
-                                'award_amount': grant.get('award_amount', 0),
-                                'contact_pi_name': grant.get('contact_pi_name'),
-                                'project_start_date': grant.get('project_start_date'),
-                                'project_end_date': grant.get('project_end_date'),
-                                'full_study_section': grant.get('full_study_section', {}),
-                                'award_notice_date': grant.get('award_notice_date'),
-                                'project_title': grant.get('project_title'),
-                                'funding_agency': 'NIH',
-                                'source': f'NIH_comprehensive_strategy_{strategy_num}'
-                            }
-                            strategy_grants.append(processed_grant)
+                            all_raw_grants.append(grant)
+                            
+                            # Apply our institution validation
+                            if validate_grant_institution_match(grant, institution_name):
+                                processed_grant = {
+                                    'fiscal_year': grant.get('fiscal_year'),
+                                    'project_num': grant.get('project_num'),
+                                    'organization': grant.get('organization', {}),
+                                    'activity_code': grant.get('activity_code'),
+                                    'award_amount': grant.get('award_amount', 0),
+                                    'contact_pi_name': grant.get('contact_pi_name'),
+                                    'project_start_date': grant.get('project_start_date'),
+                                    'project_end_date': grant.get('project_end_date'),
+                                    'full_study_section': grant.get('full_study_section', {}),
+                                    'award_notice_date': grant.get('award_notice_date'),
+                                    'project_title': grant.get('project_title'),
+                                    'funding_agency': 'NIH',
+                                    'source': f'bulk_scrape_{year}'
+                                }
+                                matched_grants.append(processed_grant)
+                                valid_grants_this_batch += 1
                         
-                        print(f"  📥 Batch {offset//batch_size + 1}: +{len(results)} grants (total: {len(strategy_grants)})")
+                        year_grants += len(results)
                         offset += batch_size
+                        
+                        print(f"  📥 {year} Batch {offset//batch_size}: {valid_grants_this_batch}/{len(results)} valid grants (total found: {len(matched_grants)})")
                         
                         if len(results) < batch_size:
                             break
-                        
-                        # Early termination if we have enough data
-                        if len(all_grants) + len(strategy_grants) > max_grants // 2:
-                            print(f"  ⏰ Early termination: sufficient data collected")
-                            break
-                    
-                    all_grants.extend(strategy_grants)
-                    print(f"✅ NIH Strategy {strategy_num}: Found {len(strategy_grants)} grants")
-                    
-                except Exception as e:
-                    print(f"⚠️ NIH Strategy {strategy_num} failed: {e}")
-                    continue
-            
-            # NSF API search - use updated endpoint (skip if we already have enough grants)
-            if len(all_grants) < max_grants * 0.8:  # Only fetch NSF if we need more data
-                print("🧪 Fetching NSF grants...")
-                nsf_url = "https://www.research.gov/awardapi-service/v1/awards.json"  # Updated endpoint
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error in {year} batch {offset//batch_size}: {e}")
+                        break
                 
-                try:
-                    nsf_params = {
-                        'printFields': 'id,title,startDate,expDate,fundsObligatedAmt,awardeeName,pdPIName,agency,fundProgramName',
-                        'rpp': '500',
-                        'awardeeName': institution_name
-                    }
-                    
-                    # Paginate through NSF results
-                    offset = 1
-                    nsf_grants = []
-                    
-                    while len(nsf_grants) < 1000:  # Reduced from 3000 to 1000 NSF grants
-                        nsf_params['offset'] = str(offset)
-                        
-                        response = await client.get(nsf_url, params=nsf_params)
-                        response.raise_for_status()
-                        data = response.json()
-                        
-                        awards = data.get('response', {}).get('award', [])
-                        if not awards:
-                            break
-                        
-                        # Process NSF grants
-                        for award in awards:
-                            processed_grant = {
-                                'fiscal_year': None,  # NSF doesn't use fiscal years the same way
-                                'project_num': award.get('id'),
-                                'organization': {
-                                    'org_name': award.get('awardeeName'),
-                                    'org_state': award.get('awardeeStateCode'),
-                                    'org_city': award.get('awardeeCity')
-                                },
-                                'activity_code': 'NSF',
-                                'award_amount': award.get('fundsObligatedAmt', 0),
-                                'contact_pi_name': award.get('pdPIName'),
-                                'project_start_date': award.get('startDate'),
-                                'project_end_date': award.get('expDate'),
-                                'project_title': award.get('title'),
-                                'funding_agency': 'NSF',
-                                'source': 'NSF_comprehensive_search'
-                            }
-                            nsf_grants.append(processed_grant)
-                        
-                        print(f"  📥 NSF Batch {offset//500 + 1}: +{len(awards)} grants (total: {len(nsf_grants)})")
-                        offset += 500
-                        
-                        if len(awards) < 500:
-                            break
-                    
-                    all_grants.extend(nsf_grants)
-                    print(f"✅ NSF: Found {len(nsf_grants)} grants")
-                    
-                except Exception as e:
-                    print(f"⚠️ NSF search failed: {e}")
-            else:
-                print(f"⏩ Skipping NSF search - already have {len(all_grants)} grants")
+                print(f"✅ {year}: Found {len([g for g in matched_grants if g['fiscal_year'] == year])} valid grants for {institution_name}")
         
-        # Remove duplicates based on project_num/id
+        # Remove duplicates
         seen_projects = set()
         unique_grants = []
-        for grant in all_grants:
+        for grant in matched_grants:
             project_num = grant.get('project_num')
             if project_num and project_num not in seen_projects:
                 seen_projects.add(project_num)
                 unique_grants.append(grant)
             elif not project_num:
-                # Include grants without project numbers (shouldn't happen but just in case)
                 unique_grants.append(grant)
         
-        print(f"🎯 Total unique grants found: {len(unique_grants)} (from {len(all_grants)} total)")
-        return unique_grants[:max_grants]  # Limit to max_grants
+        print(f"🎯 Scraping complete: Found {len(unique_grants)} unique grants for {institution_name} (filtered from {len(all_raw_grants)} total)")
+        return unique_grants
         
     except Exception as e:
-        print(f"❌ Failed to fetch comprehensive institution grants: {e}")
+        print(f"❌ Failed to scrape and filter grants: {e}")
         return []
+
+async def fetch_comprehensive_institution_grants(institution_name: str, max_grants: int = 10000) -> List[Dict[str, Any]]:
+    """
+    Fetch comprehensive grants for an institution using the new scraping approach
+    """
+    print(f"� Using bulk scraping approach for {institution_name}...")
+    
+    # Use the new scraping method that gets ALL grants and filters locally
+    return await scrape_all_grants_and_filter(institution_name, max_grants)
 
 async def fetch_additional_terminated_grants(institution_name: str) -> List[Dict[str, Any]]:
     """

@@ -1,1206 +1,2360 @@
 #!/usr/bin/env python3
 """
-DEPRECATED: This file is deprecated and should not be used.
-Please use enhanced_main.py instead.
-
-This file remains only for reference and will be removed in a future version.
+Enhanced NSF-Tracker API with optimized caching system.
 """
-
-# DEPRECATED - DO NOT USE
-# Use enhanced_main.py instead
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta
-import httpx
+from fastapi.responses import Response
+from datetime import datetime
 import asyncio
+import json
 import os
 from typing import List, Dict, Any
-import json
-from collections import defaultdict
-from pi_department_lookup import get_pi_department
-from scibert_classifier import predict_department_scibert, train_classifier
-from layoff_api import layoff_router
-from grant_cache import get_cache_status, clear_cache
+from optimized_cache import (
+    get_cached_analysis, save_cached_analysis,
+    get_cached_institution_data, save_cached_institution_data,
+    get_cached_general_data, save_cached_general_data,
+    clear_cache as clear_optimized_cache
+)
 
-app = FastAPI(title="NIH/NSF At-Risk Labs Tracker", version="1.0.0")
+# Global PI details cache
+pi_details_cache = {}
 
-# Include the layoff analysis router
-app.include_router(layoff_router)
+def cache_pi_details(institution_name: str, cancelled_grants_by_pi: dict, nonrenewal_grants_by_pi: dict):
+    """Cache detailed PI grant information for fast retrieval"""
+    global pi_details_cache
+    
+    institution_key = institution_name.lower().strip()
+    pi_details_cache[institution_key] = {}
+    
+    # Cache cancelled grants data
+    for pi_name, pi_data in cancelled_grants_by_pi.items():
+        pi_key = f"{institution_key}|{pi_name.lower().strip()}"
+        
+        if pi_key not in pi_details_cache[institution_key]:
+            pi_details_cache[institution_key][pi_key] = {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "department": pi_data.get('department', 'Unknown'),
+                "total_lost_funding": 0,
+                "cancelled_grants": [],
+                "nonrenewal_grants": [],
+                "summary": {
+                    "total_grants_affected": 0,
+                    "cancelled_count": 0,
+                    "nonrenewal_count": 0,
+                    "total_funding_lost": 0
+                }
+            }
+        
+        # Add cancelled grants
+        pi_details_cache[institution_key][pi_key]["cancelled_grants"] = pi_data.get('grants', [])
+        pi_details_cache[institution_key][pi_key]["total_lost_funding"] += pi_data.get('lost_funding', 0)
+        pi_details_cache[institution_key][pi_key]["summary"]["cancelled_count"] = len(pi_data.get('grants', []))
+    
+    # Cache non-renewal grants data  
+    for pi_name, pi_data in nonrenewal_grants_by_pi.items():
+        pi_key = f"{institution_key}|{pi_name.lower().strip()}"
+        
+        if pi_key not in pi_details_cache[institution_key]:
+            pi_details_cache[institution_key][pi_key] = {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "department": pi_data.get('department', 'Unknown'),
+                "total_lost_funding": 0,
+                "cancelled_grants": [],
+                "nonrenewal_grants": [],
+                "summary": {
+                    "total_grants_affected": 0,
+                    "cancelled_count": 0,
+                    "nonrenewal_count": 0,
+                    "total_funding_lost": 0
+                }
+            }
+        
+        # Add non-renewal grants
+        pi_details_cache[institution_key][pi_key]["nonrenewal_grants"] = pi_data.get('grants', [])
+        pi_details_cache[institution_key][pi_key]["total_lost_funding"] += pi_data.get('lost_funding', 0)
+        pi_details_cache[institution_key][pi_key]["summary"]["nonrenewal_count"] = len(pi_data.get('grants', []))
+    
+    # Update summary totals for all PIs
+    for pi_key, pi_details in pi_details_cache[institution_key].items():
+        pi_details["summary"]["total_grants_affected"] = (
+            pi_details["summary"]["cancelled_count"] + pi_details["summary"]["nonrenewal_count"]
+        )
+        pi_details["summary"]["total_funding_lost"] = pi_details["total_lost_funding"]
+    
+    print(f"✅ Cached details for {len(pi_details_cache[institution_key])} PIs at {institution_name}")
 
-# Configure CORS
+def get_cached_pi_details(institution_name: str, pi_name: str):
+    """Retrieve PI details from cache"""
+    global pi_details_cache
+    
+    institution_key = institution_name.lower().strip()
+    pi_key = f"{institution_key}|{pi_name.lower().strip()}"
+    
+    # DEBUG: Always show what's in cache when looking for a specific PI
+    print(f"🔍 Looking for PI: {pi_name} (key: {pi_key})")
+    if institution_key in pi_details_cache:
+        cached_pis = list(pi_details_cache[institution_key].keys())
+        print(f"🔍 Found {len(cached_pis)} PIs in cache for {institution_name}:")
+        for cached_pi in cached_pis:
+            # Extract just the PI name part (after the |)
+            if '|' in cached_pi:
+                pi_name_only = cached_pi.split('|', 1)[1]
+                print(f"  - {pi_name_only}")
+            else:
+                print(f"  - {cached_pi}")
+    else:
+        print(f"🔍 No cache entry found for institution {institution_name}")
+    
+    if institution_key in pi_details_cache and pi_key in pi_details_cache[institution_key]:
+        return pi_details_cache[institution_key][pi_key]
+    
+    return None
+
+def validate_grant_institution_match(grant, target_institution: str) -> bool:
+    """
+    Validate that a grant actually belongs to the target institution.
+    This prevents false matches from overly broad search terms.
+    """
+    grant_org = grant.get('organization', {})
+    if isinstance(grant_org, dict):
+        org_name = grant_org.get('org_name', '').upper()
+    else:
+        org_name = str(grant_org).upper()
+    
+    target_upper = target_institution.upper()
+    
+    # Define key terms that must be present for a match
+    target_keywords = []
+    if 'STANFORD' in target_upper:
+        target_keywords = ['STANFORD', 'UNIVERSITY']
+    elif 'HARVARD' in target_upper:
+        target_keywords = ['HARVARD', 'UNIVERSITY']
+    elif 'MIT' in target_upper:
+        target_keywords = ['MIT', 'MASSACHUSETTS', 'INSTITUTE', 'TECHNOLOGY']
+    elif 'YALE' in target_upper:
+        target_keywords = ['YALE', 'UNIVERSITY']
+    elif 'PRINCETON' in target_upper:
+        target_keywords = ['PRINCETON', 'UNIVERSITY']
+    elif 'CHICAGO' in target_upper and 'UNIVERSITY' in target_upper:
+        target_keywords = ['CHICAGO', 'UNIVERSITY']
+    else:
+        # For other institutions, split the name and require most words to match
+        words = target_upper.split()
+        target_keywords = [word for word in words if len(word) > 3]  # Skip short words like "OF", "THE"
+    
+    # Require that most key terms are present in the organization name
+    if target_keywords:
+        matches = sum(1 for keyword in target_keywords if keyword in org_name)
+        match_ratio = matches / len(target_keywords)
+        
+        # Require at least 80% of key terms to match for large institutions
+        required_ratio = 0.8 if len(target_keywords) > 1 else 1.0
+        
+        is_valid_match = match_ratio >= required_ratio
+        
+        if not is_valid_match:
+            print(f"⚠️ Institution mismatch: '{org_name}' doesn't match '{target_institution}' (ratio: {match_ratio:.2f})")
+        
+        return is_valid_match
+    
+    return False
+
+app = FastAPI(
+    title="NSF-Tracker Enhanced API",
+    description="Enhanced funding analysis with optimized caching",
+    version="2.0.0"
+)
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# NIH RePORTER API endpoint
-NIH_API_URL = "https://api.reporter.nih.gov/v2/projects/search"
-
-async def fetch_terminated_grants() -> List[Dict[str, Any]]:
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=365)
-    
-    search_criteria = {
-        "criteria": {
-            "project_end_date": {
-                "from_date": start_date.strftime("%Y-%m-%d"),
-                "to_date": end_date.strftime("%Y-%m-%d")
-            }
-        },
-        "include_fields": [
-            "Organization",
-            "ProjectTitle",
-            "ProjectEndDate",
-            "ProjectStartDate",
-            "AwardAmount",
-            "FiscalYear",
-            "ContactPiName"
-        ],
-        "offset": 0,
-        "limit": 500
-    }
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(NIH_API_URL, json=search_criteria)
-            response.raise_for_status()
-            data = response.json()
-            print(f"Fetched {len(data.get('results', []))} terminated grants from NIH API")
-            return data.get("results", [])
-        except httpx.RequestError as e:
-            print(f"Error fetching data from NIH API: {e}")
-            return []
-        except httpx.HTTPStatusError as e:
-            print(f"HTTP error from NIH API: {e}")
-            return []
-
-async def guess_department(grant: Dict[str, Any]) -> Dict[str, str]:
+async def fetch_additional_terminated_grants(institution_name: str) -> List[Dict[str, Any]]:
     """
-    Guess the department for a grant using PI lookup and fallback methods.
-    Returns dict with department, source, and confidence.
+    Fetch comprehensive terminated/cancelled grants for better department analysis
     """
-    # Try PI-based lookup first
-    pi_name = grant.get("contact_pi_name") or grant.get("pi_name")
-    org_info = grant.get("organization", {})
-    
-    # Get institution name
-    institution_name = "Unknown"
-    if isinstance(org_info, list) and len(org_info) > 0:
-        institution_name = org_info[0].get("org_name", "Unknown")
-    elif isinstance(org_info, dict):
-        institution_name = org_info.get("org_name", "Unknown")
-    
-    if pi_name and isinstance(pi_name, str) and institution_name != "Unknown":
-        try:
-            # Use the PI lookup module with force_refresh to ensure we get the latest enhanced results
-            result = await get_pi_department(pi_name.strip(), institution_name, force_refresh=True)
-            if result['department'] != "Unknown":
-                return result
-        except Exception as e:
-            print(f"Error in PI lookup for {pi_name}: {e}")
-    
-    # Fallback to organization-based guessing
-    if isinstance(org_info, list) and len(org_info) > 0:
-        org_info = org_info[0]
-    if isinstance(org_info, dict):
-        dept = org_info.get("org_dept") or org_info.get("division")
-        if dept and isinstance(dept, str) and dept.strip():
-            return {
-                'department': dept.strip(),
-                'source': 'organization',
-                'confidence': 'medium'
-            }
-    
-    # Fallback to title-based guessing
-    title = grant.get("project_title", "")
-    if isinstance(title, str):
-        title_lower = title.lower()
-        keywords = {
-            "neuro": "Neuroscience",
-            "chem": "Chemistry", 
-            "bio": "Biology",
-            "physic": "Physics",
-            "engineer": "Engineering",
-            "math": "Mathematics",
-            "computer": "Computer Science",
-            "psych": "Psychology",
-            "medic": "Medicine",
-            "pharma": "Pharmacy",
-            "cancer": "Oncology",
-            "cardio": "Cardiology",
-            "immun": "Immunology"
-        }
-        for k, v in keywords.items():
-            if k in title_lower:
-                return {
-                    'department': v,
-                    'source': 'title_keywords',
-                    'confidence': 'low'
-                }
-    
-    return {
-        'department': 'Unknown',
-        'source': 'none',
-        'confidence': 'none'
-    }
-    """
-    Calculate risk scores for institutions based on terminated grants.
-    Risk score = (terminated_grants * 3) + (non_renewed * 2) + (funding_drop / 500000)
-    For now, non_renewed = 0 and funding_drop = 0
-    """
-    institution_counts = defaultdict(int)
-    
-    # Group terminated grants by institution
-    for grant in terminated_grants:
-        org_info = grant.get("organization", {})
-        if isinstance(org_info, list) and len(org_info) > 0:
-            org_name = org_info[0].get("org_name", "Unknown")
-        elif isinstance(org_info, dict):
-            org_name = org_info.get("org_name", "Unknown")
-        else:
-            org_name = "Unknown"
+    try:
+        import httpx
+        from datetime import datetime, timedelta
         
-        institution_counts[org_name] += 1
+        print(f"🔍 Fetching comprehensive terminated grants for {institution_name}...")
+        
+        # NIH API for terminated grants
+        nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+        
+        # Search for grants in the last 5 years that have ended
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=1825)  # 5 years
+        
+        all_terminated_grants = []
+        
+        # Multiple search strategies to catch different types of terminated grants
+        search_strategies = [
+            # Strategy 1: Recently ended grants
+            {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    },
+                    "organization_names": [institution_name],
+                    "award_notice_date": {
+                        "from_date": "2019-01-01",
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    }
+                },
+                "include_fields": [
+                    "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                    "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate"
+                ],
+                "offset": 0,
+                "limit": 500
+            },
+            # Strategy 2: Search by institution variations
+            {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    },
+                    "organization_names": [
+                        institution_name,
+                        institution_name.replace("University", "Univ"),
+                        institution_name.replace("University of", ""),
+                        institution_name.split()[0] if " " in institution_name else institution_name
+                    ]
+                },
+                "include_fields": [
+                    "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                    "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate"
+                ],
+                "offset": 0,
+                "limit": 500
+            }
+        ]
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for strategy_num, search_criteria in enumerate(search_strategies, 1):
+                try:
+                    print(f"📋 Trying search strategy {strategy_num}...")
+                    response = await client.post(nih_url, json=search_criteria)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    strategy_results = []
+                    
+                    # Process grants and filter for truly terminated ones
+                    for grant in data.get("results", []):
+                        # Check if grant has actually ended (not just scheduled to end)
+                        end_date_str = grant.get('project_end_date')
+                        current_date = datetime.now()
+                        
+                        grant_ended = False
+                        if end_date_str:
+                            try:
+                                grant_end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                                if grant_end_date < current_date:
+                                    grant_ended = True
+                            except:
+                                # Try alternative date format
+                                try:
+                                    grant_end_date = datetime.strptime(end_date_str[:10], "%Y-%m-%d")
+                                    if grant_end_date < current_date:
+                                        grant_ended = True
+                                except:
+                                    continue
+                        
+                        if grant_ended:
+                            # Add standardized fields to match cache format
+                            processed_grant = {
+                                'fiscal_year': grant.get('fiscal_year'),
+                                'project_num': grant.get('project_num'),
+                                'organization': grant.get('organization', {}),
+                                'award_amount': grant.get('award_amount', 0),
+                                'contact_pi_name': grant.get('contact_pi_name'),
+                                'project_start_date': grant.get('project_start_date'),
+                                'project_end_date': grant.get('project_end_date'),
+                                'project_title': grant.get('project_title'),
+                                'funding_agency': 'NIH',
+                                'award_status': 'terminated',  # These are all ended grants
+                                'source': f'terminated_search_strategy_{strategy_num}'
+                            }
+                            strategy_results.append(processed_grant)
+                    
+                    print(f"✅ Strategy {strategy_num}: Found {len(strategy_results)} terminated grants")
+                    all_terminated_grants.extend(strategy_results)
+                    
+                except Exception as e:
+                    print(f"⚠️ Strategy {strategy_num} failed: {e}")
+                    continue
+        
+        # Remove duplicates based on project_num
+        seen_projects = set()
+        unique_terminated_grants = []
+        for grant in all_terminated_grants:
+            project_num = grant.get('project_num')
+            if project_num and project_num not in seen_projects:
+                seen_projects.add(project_num)
+                unique_terminated_grants.append(grant)
+        
+        print(f"✅ Total unique terminated grants found: {len(unique_terminated_grants)}")
+        return unique_terminated_grants
+        
+    except Exception as e:
+        print(f"❌ Failed to fetch comprehensive terminated grants: {e}")
+        return []
+
+async def scrape_all_grants_and_filter(institution_name: str, max_grants: int = 5000) -> List[Dict[str, Any]]:
+    """
+    Scrape ALL grants from recent years and filter for the target institution locally.
+    This bypasses the broken NIH search API.
+    """
+    try:
+        import httpx
+        from datetime import datetime, timedelta
+        
+        print(f"🌐 Scraping ALL recent grants and filtering for {institution_name}...")
+        
+        all_raw_grants = []
+        matched_grants = []
+        
+        # NIH API - scrape by fiscal year (more reliable than institution search)
+        nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+        
+        # Scrape grants from recent years
+        fiscal_years = [2022, 2023, 2024, 2025]
+        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for year in fiscal_years:
+                print(f"📅 Scraping grants for fiscal year {year}...")
+                
+                offset = 0
+                batch_size = 500
+                year_grants = 0
+                
+                while year_grants < max_grants // len(fiscal_years):  # Distribute across years
+                    try:
+                        search_criteria = {
+                            "criteria": {
+                                "fiscal_years": [year]
+                            },
+                            "include_fields": [
+                                "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                                "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate",
+                                "ActivityCode", "FullStudySection"
+                            ],
+                            "offset": offset,
+                            "limit": batch_size
+                        }
+                        
+                        response = await client.post(nih_url, json=search_criteria)
+                        response.raise_for_status()
+                        data = response.json()
+                        
+                        results = data.get("results", [])
+                        if not results:
+                            break
+                        
+                        # Filter grants locally for our target institution
+                        valid_grants_this_batch = 0
+                        for grant in results:
+                            all_raw_grants.append(grant)
+                            
+                            # Apply our institution validation
+                            if validate_grant_institution_match(grant, institution_name):
+                                processed_grant = {
+                                    'fiscal_year': grant.get('fiscal_year'),
+                                    'project_num': grant.get('project_num'),
+                                    'organization': grant.get('organization', {}),
+                                    'activity_code': grant.get('activity_code'),
+                                    'award_amount': grant.get('award_amount', 0),
+                                    'contact_pi_name': grant.get('contact_pi_name'),
+                                    'project_start_date': grant.get('project_start_date'),
+                                    'project_end_date': grant.get('project_end_date'),
+                                    'full_study_section': grant.get('full_study_section', {}),
+                                    'award_notice_date': grant.get('award_notice_date'),
+                                    'project_title': grant.get('project_title'),
+                                    'funding_agency': 'NIH',
+                                    'source': f'bulk_scrape_{year}'
+                                }
+                                matched_grants.append(processed_grant)
+                                valid_grants_this_batch += 1
+                        
+                        year_grants += len(results)
+                        offset += batch_size
+                        
+                        print(f"  📥 {year} Batch {offset//batch_size}: {valid_grants_this_batch}/{len(results)} valid grants (total found: {len(matched_grants)})")
+                        
+                        if len(results) < batch_size:
+                            break
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error in {year} batch {offset//batch_size}: {e}")
+                        break
+                
+                print(f"✅ {year}: Found {len([g for g in matched_grants if g['fiscal_year'] == year])} valid grants for {institution_name}")
+        
+        # Remove duplicates
+        seen_projects = set()
+        unique_grants = []
+        for grant in matched_grants:
+            project_num = grant.get('project_num')
+            if project_num and project_num not in seen_projects:
+                seen_projects.add(project_num)
+                unique_grants.append(grant)
+            elif not project_num:
+                unique_grants.append(grant)
+        
+        print(f"🎯 Scraping complete: Found {len(unique_grants)} unique grants for {institution_name} (filtered from {len(all_raw_grants)} total)")
+        return unique_grants
+        
+    except Exception as e:
+        print(f"❌ Failed to scrape and filter grants: {e}")
+        return []
+
+async def fetch_comprehensive_institution_grants(institution_name: str, max_grants: int = 10000) -> List[Dict[str, Any]]:
+    """
+    Fetch comprehensive grants for an institution using the new scraping approach
+    """
+    print(f"� Using bulk scraping approach for {institution_name}...")
     
-    # Calculate risk scores
-    risk_data = []
-    for institution, terminated_count in institution_counts.items():
-        if institution != "Unknown" and terminated_count > 0:
-            # Risk score = (terminated_grants * 3) + (non_renewed * 2) + (funding_drop / 500000)
-            # For now: non_renewed = 0, funding_drop = 0
-            risk_score = terminated_count * 3
+    # Use the new scraping method that gets ALL grants and filters locally
+    return await scrape_all_grants_and_filter(institution_name, max_grants)
+
+async def fetch_additional_terminated_grants(institution_name: str) -> List[Dict[str, Any]]:
+    """
+    Fetch comprehensive terminated/cancelled grants for better department analysis
+    """
+    try:
+        import httpx
+        from datetime import datetime, timedelta
+        
+        print(f"🔍 Fetching comprehensive terminated grants for {institution_name}...")
+        
+        # NIH API for terminated grants
+        nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+        
+        # Search for grants in the last 5 years that have ended
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=1825)  # 5 years
+        
+        all_terminated_grants = []
+        
+        # Multiple search strategies to catch different types of terminated grants
+        search_strategies = [
+            # Strategy 1: Recently ended grants
+            {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    },
+                    "organization_names": [institution_name],
+                    "award_notice_date": {
+                        "from_date": "2019-01-01",
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    }
+                },
+                "include_fields": [
+                    "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                    "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate"
+                ],
+                "offset": 0,
+                "limit": 500
+            },
+            # Strategy 2: Search by institution variations
+            {
+                "criteria": {
+                    "project_end_date": {
+                        "from_date": start_date.strftime("%Y-%m-%d"),
+                        "to_date": end_date.strftime("%Y-%m-%d")
+                    },
+                    "organization_names": [
+                        institution_name,
+                        institution_name.replace("University", "Univ"),
+                        institution_name.replace("University of", ""),
+                        institution_name.split()[0] if " " in institution_name else institution_name
+                    ]
+                },
+                "include_fields": [
+                    "Organization", "ProjectTitle", "ProjectEndDate", "ProjectStartDate",
+                    "AwardAmount", "FiscalYear", "ContactPiName", "ProjectNum", "AwardNoticeDate"
+                ],
+                "offset": 0,
+                "limit": 500
+            }
+        ]
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for strategy_num, search_criteria in enumerate(search_strategies, 1):
+                try:
+                    print(f"📋 Trying search strategy {strategy_num}...")
+                    response = await client.post(nih_url, json=search_criteria)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    strategy_results = []
+                    
+                    # Process grants and filter for truly terminated ones
+                    for grant in data.get("results", []):
+                        # Check if grant has actually ended (not just scheduled to end)
+                        end_date_str = grant.get('project_end_date')
+                        current_date = datetime.now()
+                        
+                        grant_ended = False
+                        if end_date_str:
+                            try:
+                                grant_end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                                if grant_end_date < current_date:
+                                    grant_ended = True
+                            except:
+                                # Try alternative date format
+                                try:
+                                    grant_end_date = datetime.strptime(end_date_str[:10], "%Y-%m-%d")
+                                    if grant_end_date < current_date:
+                                        grant_ended = True
+                                except:
+                                    continue
+                        
+                        if grant_ended:
+                            # Add standardized fields to match cache format
+                            processed_grant = {
+                                'fiscal_year': grant.get('fiscal_year'),
+                                'project_num': grant.get('project_num'),
+                                'organization': grant.get('organization', {}),
+                                'award_amount': grant.get('award_amount', 0),
+                                'contact_pi_name': grant.get('contact_pi_name'),
+                                'project_start_date': grant.get('project_start_date'),
+                                'project_end_date': grant.get('project_end_date'),
+                                'project_title': grant.get('project_title'),
+                                'funding_agency': 'NIH',
+                                'award_status': 'terminated',  # These are all ended grants
+                                'source': f'terminated_search_strategy_{strategy_num}'
+                            }
+                            strategy_results.append(processed_grant)
+                    
+                    print(f"✅ Strategy {strategy_num}: Found {len(strategy_results)} terminated grants")
+                    all_terminated_grants.extend(strategy_results)
+                    
+                except Exception as e:
+                    print(f"⚠️ Strategy {strategy_num} failed: {e}")
+                    continue
+        
+        # Remove duplicates based on project_num
+        seen_projects = set()
+        unique_terminated_grants = []
+        for grant in all_terminated_grants:
+            project_num = grant.get('project_num')
+            if project_num and project_num not in seen_projects:
+                seen_projects.add(project_num)
+                unique_terminated_grants.append(grant)
+        
+        print(f"✅ Total unique terminated grants found: {len(unique_terminated_grants)}")
+        return unique_terminated_grants
+        
+    except Exception as e:
+        print(f"❌ Failed to fetch comprehensive terminated grants: {e}")
+        return []
+
+async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) -> dict:
+    """
+    Analyze non-renewal grants using Times-style methodology.
+    Identifies grants that should have been renewed but show no evidence of renewal.
+    """
+    try:
+        from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+        from datetime import datetime, timedelta
+        
+        print(f"🔍 Analyzing non-renewal grants for {institution_name}")
+        
+        # Initialize tracker
+        tracker = EnhancedDelayedFundingTracker()
+        
+        # Analysis period: last 24 months for renewal eligibility (extended for better detection)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=730)  # Extended to 2 years
+        
+        # Find grants eligible for renewal that haven't been renewed
+        renewal_eligible_grants = []
+        missing_renewals = []
+        nonrenewal_dept_losses = {}
+        nonrenewal_grants_by_pi = {}
+        
+        for grant in active_grants:
+            # Check if grant is eligible for renewal
+            if tracker._is_renewal_eligible_grant(grant):
+                expected_renewal_date = tracker._calculate_expected_renewal_date(grant)
+                
+                if expected_renewal_date and expected_renewal_date < datetime.now() - timedelta(days=90):  # 90-day grace period
+                    pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
+                    amount = float(grant.get('award_amount', 0) or 0)
+                    
+                    # Check for renewal evidence using synchronous method
+                    renewal_found = tracker._check_for_renewal_evidence_sync(grant, active_grants)
+                    
+                    renewal_info = {
+                        'grant': grant,
+                        'pi_name': pi_name,
+                        'expected_renewal_date': expected_renewal_date.isoformat(),
+                        'award_amount': amount,
+                        'days_overdue': (datetime.now() - expected_renewal_date).days,
+                        'renewal_found': renewal_found,
+                        'project_title': grant.get('project_title', ''),
+                        'project_num': grant.get('project_num') or grant.get('award_id'),
+                        'funding_agency': grant.get('funding_agency', 'Unknown')
+                    }
+                    
+                    renewal_eligible_grants.append(renewal_info)
+                    
+                    if not renewal_found:
+                        missing_renewals.append(renewal_info)
+                        
+                        # Department-level tracking
+                        try:
+                            from pi_department_lookup import get_department_string
+                            dept = get_department_string(pi_name, institution_name)
+                        except:
+                            # Fallback to grant organization data
+                            org_info = grant.get('organization', {})
+                            if isinstance(org_info, dict):
+                                dept = org_info.get('dept_type', 'Other')
+                            elif isinstance(org_info, list) and org_info:
+                                dept = org_info[0].get('dept_type', 'Other')
+                            else:
+                                dept = 'Other'
+                        
+                        # Normalize department name with NLP analysis if needed
+                        dept = normalize_department_name(dept, grant)
+                        
+                        nonrenewal_dept_losses[dept] = nonrenewal_dept_losses.get(dept, 0) + amount
+                        
+                        # PI-level tracking
+                        if pi_name not in nonrenewal_grants_by_pi:
+                            nonrenewal_grants_by_pi[pi_name] = {
+                                'pi_name': pi_name,
+                                'department': dept,
+                                'lost_funding': 0,
+                                'grants': []
+                            }
+                        
+                        nonrenewal_grants_by_pi[pi_name]['lost_funding'] += amount
+                        nonrenewal_grants_by_pi[pi_name]['grants'].append({
+                            'award_id': grant.get('project_num') or grant.get('award_id'),
+                            'title': grant.get('project_title', ''),  # Frontend expects 'title', not 'project_title'
+                            'abstract': grant.get('abstract', grant.get('project_abstract', '')),  # Add abstract for frontend
+                            'amount': amount,
+                            'expected_renewal': expected_renewal_date.isoformat(),
+                            'days_overdue': (datetime.now() - expected_renewal_date).days,
+                            'funding_agency': grant.get('funding_agency', 'Unknown')
+                        })
+        
+        # Calculate metrics
+        total_at_risk_funding = sum(r['award_amount'] for r in missing_renewals)
+        renewal_rate = 0
+        if renewal_eligible_grants:
+            renewed_count = len([r for r in renewal_eligible_grants if r['renewal_found']])
+            renewal_rate = (renewed_count / len(renewal_eligible_grants)) * 100
+        
+        top_affected_pis = sorted(nonrenewal_grants_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)[:10]
+        
+        risk_level = "LOW"
+        if len(missing_renewals) > 5 or total_at_risk_funding > 10000000:
+            risk_level = "HIGH"
+        elif len(missing_renewals) > 2 or total_at_risk_funding > 5000000:
+            risk_level = "MEDIUM"
+        
+        return {
+            'total_lost_funding': total_at_risk_funding,
+            'grants_eligible_for_renewal': len(renewal_eligible_grants),
+            'missing_renewals_count': len(missing_renewals),
+            'renewal_rate': renewal_rate,
+            'risk_level': risk_level,
+            'departments_affected': len(nonrenewal_dept_losses),
+            'pis_impacted': len(nonrenewal_grants_by_pi),
+            'top_affected_pis': [
+                {
+                    'pi_name': pi['pi_name'],
+                    'department': pi['department'],
+                    'lost_funding': pi['lost_funding'],
+                    'grants_count': len(pi['grants'])
+                } for pi in top_affected_pis
+            ],
+            'department_losses': dict(sorted(nonrenewal_dept_losses.items(), key=lambda x: x[1], reverse=True)),
+            'detailed_missing_renewals': missing_renewals[:10],  # Top 10 for review
+            'analysis_period': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+            'methodology_note': 'Times-style non-renewal analysis: identifies grants eligible for renewal that show no evidence of renewal within expected timeframes',
+            'nonrenewal_grants_by_pi': nonrenewal_grants_by_pi  # Raw PI data for caching
+        }
+        
+    except Exception as e:
+        print(f"Error in non-renewal analysis: {e}")
+        return {
+            'total_lost_funding': 0,
+            'grants_eligible_for_renewal': 0,
+            'missing_renewals_count': 0,
+            'renewal_rate': 0,
+            'risk_level': 'UNKNOWN',
+            'departments_affected': 0,
+            'pis_impacted': 0,
+            'top_affected_pis': [],
+            'department_losses': {},
+            'detailed_missing_renewals': [],
+            'analysis_period': '',
+            'methodology_note': 'Non-renewal analysis failed',
+            'error': str(e)
+        }
+
+async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cache: dict = None) -> dict:
+    """
+    Analyze institution using fresh NIH/NSF grant data
+    """
+    try:
+        from layoff_estimator import calculate_funding_cliff, estimate_lab_size
+        
+        print(f"🔬 Analyzing {len(grants)} fresh NIH/NSF grants for {institution_name}")
+        
+        # Filter to ensure all grants are dictionaries
+        valid_grants = []
+        for grant in grants:
+            if isinstance(grant, dict):
+                valid_grants.append(grant)
+            else:
+                print(f"⚠️ Skipping invalid grant (type: {type(grant)})")
+        
+        print(f"📊 Valid grants: {len(valid_grants)}")
+        grants = valid_grants
+        
+        # Separate active and terminated grants
+        active_grants = []
+        terminated_grants = []
+        total_funding = 0
+        
+        for grant in grants:
+            try:
+                amount = float(grant.get('award_amount', 0) or 0)
+                total_funding += amount
+                
+                # Check grant status
+                status = grant.get('award_status', '').lower()
+                if status in ['terminated', 'cancelled', 'expired']:
+                    terminated_grants.append(grant)
+                else:
+                    active_grants.append(grant)
+            except Exception as e:
+                print(f"⚠️ Error processing grant status: {e}")
+                continue
+        
+        print(f"📊 Found {len(active_grants)} active grants, {len(terminated_grants)} terminated grants")
+        
+        # Calculate funding breakdown
+        funding_breakdown = {
+            'nih_funding': 0,
+            'nsf_funding': 0,
+            'total_funding': total_funding
+        }
+        
+        for grant in grants:
+            try:
+                amount = float(grant.get('award_amount', 0) or 0)
+                agency = grant.get('funding_agency', '').upper()
+                if agency == 'NIH':
+                    funding_breakdown['nih_funding'] += amount
+                elif agency == 'NSF':
+                    funding_breakdown['nsf_funding'] += amount
+            except Exception as e:
+                print(f"⚠️ Error in funding breakdown: {e}")
+                continue
+        
+        # Calculate risk metrics
+        cliff_analysis = calculate_funding_cliff(active_grants, months_ahead=12) if active_grants else {'cliff_percentage': 0, 'expiring_funding': 0}
+        lab_size_info = estimate_lab_size(total_funding)
+        
+        # Process departments (enhanced approach with cancelled grants tracking)
+        dept_breakdown = {}
+        cancelled_dept_losses = {}
+        cancelled_grants_by_pi = {}
+        
+        if pi_cache:
+            try:
+                from pi_department_lookup import get_department_string
+                
+                # Process active grants by department
+                for grant in active_grants:
+                    pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
+                    if pi_name:
+                        dept = get_department_string(pi_name, institution_name)
+                        # Normalize department name with NLP analysis if needed
+                        dept = normalize_department_name(dept, grant)
+                        amount = float(grant.get('award_amount', 0) or 0)
+                        dept_breakdown[dept] = dept_breakdown.get(dept, 0) + amount
+                
+                # Process terminated grants by department for cancelled grants analysis
+                for grant in terminated_grants:
+                    # Check if grant belongs to target institution
+                    grant_org = grant.get('organization', {})
+                    if isinstance(grant_org, dict):
+                        org_name = grant_org.get('org_name', '').upper()
+                    else:
+                        org_name = ''
+                    
+                    # Simple institution matching - check if institution name appears in org name
+                    institution_upper = institution_name.upper()
+                    institution_keywords = institution_upper.split()
+                    
+                    # Check if any major keywords from institution name appear in org name
+                    is_institution_match = any(keyword in org_name for keyword in institution_keywords if len(keyword) > 3)
+                    
+                    if is_institution_match:
+                        pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
+                        if pi_name:
+                            dept = get_department_string(pi_name, institution_name)
+                            # Normalize department name with NLP analysis if needed
+                            dept = normalize_department_name(dept, grant)
+                            amount = float(grant.get('award_amount', 0) or 0)
+                            
+                            # Track department losses
+                            cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
+                            
+                            # Track PI-level losses
+                            if pi_name not in cancelled_grants_by_pi:
+                                cancelled_grants_by_pi[pi_name] = {
+                                    'pi_name': pi_name,
+                                    'department': dept,
+                                    'lost_funding': 0,
+                                    'grants': []
+                                }
+                            
+                            cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
+                            cancelled_grants_by_pi[pi_name]['grants'].append({
+                                'award_id': grant.get('project_num') or grant.get('award_id'),
+                                'title': grant.get('project_title', ''),  # Frontend expects 'title', not 'project_title'
+                                'abstract': grant.get('abstract', grant.get('project_abstract', '')),  # Add abstract for frontend
+                                'amount': amount,
+                                'status': grant.get('award_status', 'Unknown'),
+                                'end_date': grant.get('project_end_date'),
+                                'funding_agency': grant.get('funding_agency', 'Unknown')
+                            })
+                        
+            except Exception:
+                # Fallback to simple department detection
+                for grant in active_grants:
+                    # Try to extract department from grant data
+                    org_info = grant.get('organization', {})
+                    dept_type = 'Other'
+                    
+                    if isinstance(org_info, dict):
+                        dept_type = org_info.get('dept_type', 'Other')
+                    elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
+                        dept_type = org_info[0].get('dept_type', 'Other')
+                    
+                    # Normalize department name with NLP analysis if needed
+                    dept_type = normalize_department_name(dept_type, grant)
+                    
+                    if dept_type and dept_type != 'Other':
+                        amount = float(grant.get('award_amount', 0) or 0)
+                        dept_breakdown[dept_type] = dept_breakdown.get(dept_type, 0) + amount
+                
+                # Track cancelled grants by department
+                for grant in terminated_grants:
+                    org_info = grant.get('organization', {})
+                    dept_type = 'Other'
+                    
+                    if isinstance(org_info, dict):
+                        dept_type = org_info.get('dept_type', 'Other')
+                    elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
+                        dept_type = org_info[0].get('dept_type', 'Other')
+                    
+                    # Normalize department name with NLP analysis if needed
+                    dept_type = normalize_department_name(dept_type, grant)
+                    
+                    if dept_type and dept_type != 'Other':
+                        amount = float(grant.get('award_amount', 0) or 0)
+                        cancelled_dept_losses[dept_type] = cancelled_dept_losses.get(dept_type, 0) + amount
+        else:
+            # Simple fallback when no PI cache
+            for grant in active_grants:
+                org_info = grant.get('organization', {})
+                dept_type = 'Other'
+                
+                if isinstance(org_info, dict):
+                    dept_type = org_info.get('dept_type', 'Other')
+                elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
+                    dept_type = org_info[0].get('dept_type', 'Other')
+                
+                # Normalize department name with NLP analysis if needed
+                dept_type = normalize_department_name(dept_type, grant)
+                
+                if dept_type:
+                    amount = float(grant.get('award_amount', 0) or 0)
+                    dept_breakdown[dept_type] = dept_breakdown.get(dept_type, 0) + amount
             
-            risk_data.append({
-                "institution": institution,
-                "score": risk_score,
-                "terminated": terminated_count
-            })
+            # Track cancelled grants by department
+            for grant in terminated_grants:
+                org_info = grant.get('organization', {})
+                dept_type = 'Other'
+                
+                if isinstance(org_info, dict):
+                    dept_type = org_info.get('dept_type', 'Other')
+                elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
+                    dept_type = org_info[0].get('dept_type', 'Other')
+                
+                # Normalize department name with NLP analysis if needed
+                dept_type = normalize_department_name(dept_type, grant)
+                
+                if dept_type:
+                    amount = float(grant.get('award_amount', 0) or 0)
+                    cancelled_dept_losses[dept_type] = cancelled_dept_losses.get(dept_type, 0) + amount
+        
+        # Prepare cancelled grants analysis
+        total_cancelled_funding = sum(cancelled_dept_losses.values())
+        top_cancelled_pis = sorted(cancelled_grants_by_pi.values(), key=lambda x: x['lost_funding'], reverse=True)[:10]
+        
+        # Non-renewal grants analysis (Times-style methodology)
+        print("🔍 Performing non-renewal grants analysis...")
+        nonrenewal_analysis = await analyze_nonrenewal_grants(institution_name, active_grants)
+        
+        # Enhanced cash flow risk assessment with multiple methodologies
+        risk_factors = []
+        risk_score = cliff_analysis.get('cliff_percentage', 0)
+        
+        # Add cancelled grants impact to risk
+        if total_cancelled_funding > 0:
+            cancellation_risk = min(30, (total_cancelled_funding / max(total_funding, 1)) * 100)
+            risk_score += cancellation_risk
+            risk_factors.append(f"Grant cancellations: ${total_cancelled_funding:,.0f} lost funding")
+        
+        # Add non-renewal impact to risk
+        if nonrenewal_analysis.get('total_lost_funding', 0) > 0:
+            nonrenewal_risk = min(20, (nonrenewal_analysis['total_lost_funding'] / max(total_funding, 1)) * 100)
+            risk_score += nonrenewal_risk
+            risk_factors.append(f"Non-renewal delays: ${nonrenewal_analysis['total_lost_funding']:,.0f} at risk")
+        
+        # Add traditional disbursement analysis if available
+        try:
+            from delayed_funding_tracker import DelayedFundingTracker
+            legacy_tracker = DelayedFundingTracker()
+            
+            # Convert grants to USASpending format for legacy analysis
+            usaspending_grants = []
+            for grant in grants:
+                usaspending_grants.append({
+                    'Award ID': grant.get('project_num') or grant.get('award_id', ''),
+                    'Award Amount': grant.get('award_amount', 0),
+                    'Outlayed Amount': 0,  # NIH/NSF data doesn't include disbursement info
+                    'Obligated Amount': grant.get('award_amount', 0),
+                    'Base Obligation Date': grant.get('project_start_date', ''),
+                    'Action Date': grant.get('award_notice_date', ''),
+                    'Award Description': grant.get('project_title', ''),
+                    'Recipient Name': institution_name,
+                    'Period of Performance Start Date': grant.get('project_start_date', ''),
+                    'Period of Performance Current End Date': grant.get('project_end_date', '')
+                })
+            
+            if usaspending_grants:
+                legacy_analysis = legacy_tracker.analyze_funding_delays(usaspending_grants)
+                if legacy_analysis.get('delayed_funding_risk', 0) > 0:
+                    disbursement_risk = min(25, legacy_analysis['delayed_funding_risk'])
+                    risk_score += disbursement_risk
+                    risk_factors.append(f"Legacy disbursement delays detected")
+                    
+        except Exception as e:
+            print(f"Legacy cash flow analysis error: {e}")
+        
+        # Funding cliff analysis
+        if cliff_analysis.get('cliff_percentage', 0) > 15:
+            risk_factors.append(f"Funding cliff: {cliff_analysis['cliff_percentage']:.1f}% of funding expires within 12 months")
+        
+        # Build comprehensive result
+        result = {
+            'institution': institution_name,
+            'data_source': 'Fresh NIH/NSF APIs',
+            'overview': {
+                'total_grants': len(grants),
+                'active_grants': len(active_grants),
+                'terminated_grants': len(terminated_grants),
+                'total_funding': total_funding,
+                'total_undisbursed': 0,  # NIH/NSF data doesn't track disbursement details
+                'disbursement_efficiency': 'N/A (NIH/NSF data)',
+                'risk_score': cliff_analysis.get('cliff_percentage', 0)
+            },
+            'financial_overview': {
+                'undisbursed_amount': 0,
+                'disbursement_efficiency': 'N/A (research grant focus)',
+                'funding_cliff_percentage': cliff_analysis.get('cliff_percentage', 0),
+                'estimated_positions_at_risk': cliff_analysis.get('expiring_funding', 0) / 200000
+            },
+            'funding_breakdown': funding_breakdown,
+            'department_breakdown': dict(sorted(dept_breakdown.items(), key=lambda x: x[1], reverse=True)),
+            'cancelled_grants_impact': {
+                'total_lost_funding': total_cancelled_funding,
+                'departments_affected': len(cancelled_dept_losses),
+                'pis_impacted': len(cancelled_grants_by_pi),
+                'top_affected_pis': [
+                    {
+                        'pi_name': pi['pi_name'],
+                        'department': pi['department'],
+                        'lost_funding': pi['lost_funding'],
+                        'grants_count': len(pi['grants'])
+                    } for pi in top_cancelled_pis
+                ],
+                'department_losses': dict(sorted(cancelled_dept_losses.items(), key=lambda x: x[1], reverse=True)),
+                'methodology_note': 'Analysis based on fresh NIH/NSF grant status data tracking terminated and cancelled grants'
+            },
+            'nonrenewal_grants_impact': nonrenewal_analysis,
+            'grant_details': grants[:50],  # Limit to first 50 for response size
+            'cash_flow_risk': {
+                'level': 'HIGH' if risk_score > 50 else 'MEDIUM' if risk_score > 25 else 'LOW',
+                'score': min(100, risk_score),
+                'risk_factors': risk_factors,
+                'methodology_note': 'Enhanced risk assessment including funding cliff, cancelled grants, and non-renewal delays'
+            },
+            'methodology_note': 'Enhanced analysis with cancelled grants tracking based on fresh NIH Reporter and NSF Awards API data'
+        }
+        
+        # Cache PI details for faster access on future requests
+        print(f"💾 Caching PI details for {institution_name}...")
+        try:
+            # Get the raw PI data from nonrenewal analysis
+            nonrenewal_grants_by_pi = nonrenewal_analysis.get('nonrenewal_grants_by_pi', {})
+            
+            # Cache both cancelled and nonrenewal PI data
+            cache_pi_details(institution_name, cancelled_grants_by_pi, nonrenewal_grants_by_pi)
+            print(f"✅ Cached details for {len(cancelled_grants_by_pi)} cancelled PIs and {len(nonrenewal_grants_by_pi)} nonrenewal PIs")
+        except Exception as e:
+            print(f"⚠️ Error caching PI details: {e}")
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in fresh NIH/NSF analysis: {e}")
+        return {
+            'institution': institution_name,
+            'error': f'Fresh data analysis failed: {str(e)}',
+            'note': 'Falling back to comprehensive analysis'
+        }
+
+def normalize_department_name(dept_name, grant_context=None):
+    """
+    Enhanced department name normalization with BERT NLP analysis.
     
-    # Sort by risk score (highest first)
-    risk_data.sort(key=lambda x: x["score"], reverse=True)
+    Args:
+        dept_name: Original department name from grant data
+        grant_context: Dict with grant information for BERT analysis (optional)
+                      Should include: project_title, project_abstract, etc.
+    """
+    if not dept_name or dept_name is None:
+        dept_name = "Other"
     
-    return risk_data
+    dept_str = str(dept_name).strip()
+    
+    # Handle various representations of null/none/empty/other
+    if dept_str.lower() in ['null', 'none', '', 'unknown department', 'unknown', 'n/a', 'na', 'other']:
+        # Try to use BERT classification if grant context is available
+        if grant_context:
+            try:
+                from bert_classifier import predict_from_research_context
+                
+                # Extract text for classification
+                title = grant_context.get('project_title', '')
+                abstract = grant_context.get('abstract', grant_context.get('project_abstract', ''))
+                org_name = ''
+                
+                # Extract organization name from grant data
+                org_info = grant_context.get('organization', {})
+                if isinstance(org_info, dict):
+                    org_name = org_info.get('org_name', '')
+                elif isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get('org_name', '') if isinstance(org_info[0], dict) else ''
+                
+                # Use BERT to classify based on project content
+                nlp_result = predict_from_research_context(
+                    title=title,
+                    abstract=abstract,
+                    affiliation=org_name,
+                    keywords=[]
+                )
+                
+                classified_dept = nlp_result.get('department', 'Other')
+                confidence = nlp_result.get('confidence', 0)
+                
+                print(f"� BERT analysis: '{title[:50]}...' -> {classified_dept} (confidence: {confidence:.2f})")
+                
+                # Use BERT result if it's not "Unknown" and has reasonable confidence
+                if classified_dept and classified_dept != 'Unknown' and confidence > 0.05:  # Lower threshold for BERT
+                    print(f"� ✅ Using BERT result: {classified_dept} (confidence: {confidence:.2f})")
+                    return classified_dept
+                else:
+                    print(f"⚠️ BERT confidence too low ({confidence:.2f}) or returned Unknown, using 'Other'")
+                        
+            except Exception as e:
+                print(f"⚠️ NLP classification failed: {e}")
+        
+        return "Other"
+    
+    return dept_str
+
+def load_pi_department_cache():
+    """Load the PI department cache for matching PIs to departments"""
+    try:
+        cache_file = "pi_department_cache.json"
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        print(f"Error loading PI department cache: {e}")
+        return {}
 
 @app.get("/")
 async def root():
-    return {"message": "NIH/NSF At-Risk Labs Tracker API"}
+    return {
+        "message": "Enhanced NSF-Tracker API with Optimized Caching",
+        "version": "2.0.0",
+        "features": [
+            "Optimized O(1) caching system",
+            "Enhanced delayed funding analysis",
+            "Department-level breakdown",
+            "Multi-agency integration"
+        ]
+    }
 
-@app.get("/api/risk-leaderboard")
-async def get_risk_leaderboard():
+@app.get("/api/delayed-funding/{institution_name}")
+async def get_comprehensive_delayed_funding_analysis(
+    institution_name: str,
+    include_departments: bool = True,
+    method: str = "comprehensive",
+    force_refresh: bool = False
+):
     """
-    Get the risk leaderboard for institutions based on terminated grants.
+    Comprehensive delayed funding analysis with optimized caching.
+    
+    This endpoint provides instant cached results for previously analyzed institutions,
+    dramatically improving performance over the legacy system.
+    """
+    from datetime import datetime as dt
+    
+    try:
+        print(f"🔍 Enhanced analysis for: {institution_name} (method: {method}, departments: {include_departments})")
+        
+        # Check optimized cache first (skip if force_refresh)
+        if not force_refresh:
+            print(f"🚀 Checking optimized cache for {institution_name}...")
+            cached_result = get_cached_analysis(institution_name, method, include_departments)
+            
+            if cached_result:
+                print(f"✅ Using cached analysis for {institution_name} (optimized cache)")
+                return cached_result
+
+        # Perform fresh analysis
+        print(f"🔍 Starting fresh analysis for {institution_name}")
+        
+        # Import analysis function
+        from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+        
+        # Load PI cache
+        pi_cache = load_pi_department_cache()
+        
+        # Create tracker and perform analysis using fresh NIH/NSF data
+        print("🎯 Using fresh NIH/NSF grant data for enhanced analysis...")
+        
+        # Use fresh NIH/NSF cache data for enhanced analysis
+        from grant_cache import get_combined_cache
+        fresh_grants = get_combined_cache()
+        
+        if fresh_grants and len(fresh_grants) > 0:
+            print(f"📊 Using fresh grant cache with {len(fresh_grants)} grants")
+            
+            # Filter grants for this institution
+            from layoff_estimator import normalize_institution_name
+            normalized_institution = normalize_institution_name(institution_name)
+            institution_grants = []
+            
+            for grant in fresh_grants:
+                org_info = grant.get('organization', {})
+                if isinstance(org_info, list) and org_info:
+                    org_name = org_info[0].get('org_name','')
+                elif isinstance(org_info, dict):
+                    org_name = org_info.get('org_name','')
+                else:
+                    continue
+                    
+                if normalize_institution_name(org_name) == normalized_institution:
+                    institution_grants.append(grant)
+            
+            if len(institution_grants) > 0:
+                print(f"✅ Found {len(institution_grants)} grants for {institution_name} in fresh NIH/NSF data")
+                
+                # Perform analysis using fresh data
+                result = await analyze_fresh_nih_nsf_data(institution_name, institution_grants, pi_cache)
+            else:
+                print(f"⚠️ No grants found in fresh data, falling back to comprehensive tracker")
+                # Fallback to comprehensive tracker
+                tracker = EnhancedDelayedFundingTracker()
+                result = await tracker.analyze_comprehensive_delays(
+                    institution_name=institution_name,
+                    pi_cache=pi_cache,
+                    force_refresh=force_refresh
+                )
+        else:
+            print("⚠️ Fresh cache not available, using comprehensive tracker")
+            # Fallback to comprehensive tracker
+            tracker = EnhancedDelayedFundingTracker()
+            result = await tracker.analyze_comprehensive_delays(
+                institution_name=institution_name,
+                pi_cache=pi_cache,
+                force_refresh=force_refresh
+            )
+        
+        # Add metadata
+        result.update({
+            'institution': institution_name,
+            'analysis_date': dt.now().isoformat(),
+            'method': method,
+            'include_departments': include_departments,
+            'cache_optimized': True
+        })
+        
+        # Cache the result using optimized cache
+        try:
+            print(f"💾 Caching analysis result for {institution_name} (optimized)")
+            save_cached_analysis(institution_name, result, method, include_departments)
+        except Exception as e:
+            print(f"Optimized caching error: {e}")
+
+        # Add summary field for frontend compatibility
+        financial_overview = result.get('financial_overview', {})
+        overview = result.get('overview', {})
+        result['summary'] = {
+            'total_undisbursed': financial_overview.get('undisbursed_amount', overview.get('total_undisbursed', 0)),
+            'disbursement_efficiency': financial_overview.get('disbursement_efficiency', overview.get('disbursement_efficiency', '0.0%')),
+            'delayed_funding_risk': overview.get('risk_score', result.get('cash_flow_risk', {}).get('score', 0)),
+            'cash_flow_risk': result.get('cash_flow_risk', {'level': 'UNKNOWN', 'score': 0})
+        }
+
+        return result
+        
+    except Exception as e:
+        print(f"Error in comprehensive delayed funding analysis: {e}")
+        return {
+            'institution': institution_name,
+            'error': f'Analysis failed: {str(e)}',
+            'note': 'Comprehensive delayed funding analysis not available',
+            'analysis_date': dt.now().isoformat(),
+            'cache_optimized': True
+        }
+
+@app.get("/api/enhanced-delayed-funding/{institution_name}")
+async def get_enhanced_delayed_funding_analysis_legacy(institution_name: str, method: str = "comprehensive", force_refresh: bool = False):
+    """Legacy endpoint - redirects to optimized comprehensive analysis"""
+    return await get_comprehensive_delayed_funding_analysis(institution_name, include_departments=True, method=method, force_refresh=force_refresh)
+
+@app.get("/api/delayed-funding-departments/{institution_name}")
+async def get_delayed_funding_by_departments_legacy(institution_name: str):
+    """Legacy endpoint - redirects to optimized comprehensive analysis with departments"""
+    return await get_comprehensive_delayed_funding_analysis(institution_name, include_departments=True, method="comprehensive")
+
+@app.get("/api/methodology-comparison/{institution_name}")
+async def get_methodology_comparison(institution_name: str):
+    """
+    Compare different funding analysis methodologies:
+    1. Enhanced (current) - Cancelled + Non-renewal + Cash flow
+    2. Times-style - Non-renewal focus
+    3. Legacy USASpending - Disbursement focus
     """
     try:
-        terminated_grants = await fetch_terminated_grants()
+        print(f"🔬 Methodology comparison for {institution_name}")
         
-        if not terminated_grants:
-            return {
-                "data": [
-                    {"institution": "UCLA", "score": 9.5, "terminated": 4, "departments": ["Biology", "Chemistry"]},
-                    {"institution": "Harvard", "score": 7.2, "terminated": 3, "departments": ["Neuroscience"]},
-                    {"institution": "MIT", "score": 6.0, "terminated": 2, "departments": ["Engineering"]}
-                ],
-                "total": 3,
-                "note": "Sample data - API may be unavailable"
+        # Get enhanced analysis (current method)
+        enhanced_result = await get_comprehensive_delayed_funding_analysis(institution_name, method="comprehensive")
+        
+        # Get Times-style renewal analysis
+        from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+        times_tracker = EnhancedDelayedFundingTracker()
+        times_result = await times_tracker.analyze_renewal_delays(institution_name)
+        
+        # Get legacy USASpending disbursement analysis
+        try:
+            from delayed_funding_tracker import DelayedFundingTracker
+            from layoff_estimator import fetch_institution_grants
+            
+            # Fetch grants using legacy method
+            legacy_grants = await fetch_institution_grants(
+                organization=institution_name,
+                active_only=False,
+                max_records_per_source=1000
+            )
+            
+            # Convert to USASpending format
+            usaspending_data = []
+            for grant in legacy_grants:
+                usaspending_data.append({
+                    'Award ID': grant.get('project_num') or grant.get('award_id', ''),
+                    'Award Amount': grant.get('award_amount', 0),
+                    'Outlayed Amount': 0,  # Not available in NIH/NSF data
+                    'Obligated Amount': grant.get('award_amount', 0),
+                    'Base Obligation Date': grant.get('project_start_date', ''),
+                    'Action Date': grant.get('award_notice_date', ''),
+                    'Award Description': grant.get('project_title', ''),
+                    'Recipient Name': institution_name,
+                    'Period of Performance Start Date': grant.get('project_start_date', ''),
+                    'Period of Performance Current End Date': grant.get('project_end_date', '')
+                })
+            
+            legacy_tracker = DelayedFundingTracker()
+            legacy_result = legacy_tracker.analyze_funding_delays(usaspending_data)
+            
+        except Exception as e:
+            print(f"Legacy analysis error: {e}")
+            legacy_result = {
+                'error': str(e),
+                'note': 'Legacy USASpending analysis unavailable'
             }
         
-        # Group by institution and collect departments
-        institution_data = {}
-        
-        for grant in terminated_grants:
-            org_info = grant.get("organization", {})
-            if isinstance(org_info, list) and len(org_info) > 0:
-                org_name = org_info[0].get("org_name", "Unknown")
-            elif isinstance(org_info, dict):
-                org_name = org_info.get("org_name", "Unknown")
-            else:
-                org_name = "Unknown"
-            
-            if org_name == "Unknown":
-                continue
-            
-            # Get department information
-            dept_info = await guess_department(grant)
-            dept_name = dept_info['department']
-            
-            if org_name not in institution_data:
-                institution_data[org_name] = {
-                    "terminated": 0, 
-                    "departments": set(),
-                    "dept_details": []
+        return {
+            'institution': institution_name,
+            'analysis_date': datetime.now().isoformat(),
+            'methodologies': {
+                'enhanced_current': {
+                    'name': 'Enhanced Multi-Methodology Analysis',
+                    'description': 'Combines cancelled grants, non-renewal analysis, and cash flow risk assessment',
+                    'data_sources': ['NIH Reporter API', 'NSF Awards API', 'USASpending.gov'],
+                    'risk_score': enhanced_result.get('cash_flow_risk', {}).get('score', 0),
+                    'risk_level': enhanced_result.get('cash_flow_risk', {}).get('level', 'UNKNOWN'),
+                    'cancelled_funding': enhanced_result.get('cancelled_grants_impact', {}).get('total_lost_funding', 0),
+                    'nonrenewal_funding': enhanced_result.get('nonrenewal_grants_impact', {}).get('total_lost_funding', 0),
+                    'total_funding': enhanced_result.get('overview', {}).get('total_funding', 0),
+                    'methodology_strengths': [
+                        'Comprehensive multi-agency coverage',
+                        'Real-time cancelled grants tracking',
+                        'Non-renewal pattern detection',
+                        'Enhanced risk factor analysis'
+                    ]
+                },
+                'times_style': {
+                    'name': 'Times-Style Renewal Analysis',
+                    'description': 'Focus on grants that should have renewed but show no evidence of renewal',
+                    'data_sources': ['NIH Reporter API', 'NSF Awards API'],
+                    'expected_renewals': times_result.get('expected_renewals', 0),
+                    'missing_renewals': times_result.get('missing_renewals', 0),
+                    'renewal_rate': times_result.get('renewal_rate', 0),
+                    'at_risk_amount': times_result.get('at_risk_amount', 0),
+                    'risk_level': times_result.get('risk_level', 'UNKNOWN'),
+                    'methodology_strengths': [
+                        'Historical renewal pattern analysis',
+                        'PI continuity tracking',
+                        'Grant lifecycle understanding',
+                        'Manual verification capability'
+                    ]
+                },
+                'legacy_usaspending': {
+                    'name': 'Legacy USASpending Disbursement Analysis',
+                    'description': 'Traditional disbursement tracking (awarded vs. disbursed amounts)',
+                    'data_sources': ['USASpending.gov API'],
+                    'total_awards': legacy_result.get('total_awards', 0),
+                    'total_awarded': legacy_result.get('total_awarded_amount', 0),
+                    'total_outlayed': legacy_result.get('total_outlayed_amount', 0),
+                    'undisbursed_amount': legacy_result.get('undisbursed_amount', 0),
+                    'disbursement_efficiency': legacy_result.get('disbursement_efficiency', 0),
+                    'delayed_funding_risk': legacy_result.get('delayed_funding_risk', 0),
+                    'methodology_strengths': [
+                        'Actual cash flow tracking',
+                        'Disbursement timeline analysis',
+                        'Federal-wide coverage',
+                        'Real-time financial data'
+                    ],
+                    'limitations': [
+                        'Limited to USASpending data only',
+                        '1-month reporting lag',
+                        'Missing NIH/NSF direct API data',
+                        'No renewal pattern analysis'
+                    ]
                 }
-            
-            institution_data[org_name]["terminated"] += 1
-            institution_data[org_name]["departments"].add(dept_name)
-            institution_data[org_name]["dept_details"].append({
-                "department": dept_name,
-                "source": dept_info['source'],
-                "confidence": dept_info['confidence']
-            })
-        
-        # Build risk data
-        risk_data = []
-        for institution, info in institution_data.items():
-            risk_score = info["terminated"] * 3
-            
-            # Calculate department confidence stats
-            dept_sources = {}
-            for detail in info["dept_details"]:
-                source = detail["source"]
-                dept_sources[source] = dept_sources.get(source, 0) + 1
-            
-            risk_data.append({
-                "institution": institution,
-                "score": risk_score,
-                "terminated": info["terminated"],
-                "departments": sorted(list(info["departments"])),
-                "lookup_stats": dept_sources
-            })
-        
-        # Sort by risk score (highest first)
-        risk_data.sort(key=lambda x: x["score"], reverse=True)
-        
-        return {
-            "data": risk_data[:20],
-            "total": len(risk_data),
-            "last_updated": datetime.now().isoformat()
+            },
+            'comparison_insights': {
+                'data_completeness': {
+                    'enhanced': 'High - Fresh NIH/NSF + USASpending integration',
+                    'times_style': 'High - Fresh NIH/NSF data with renewal analysis',
+                    'legacy': 'Medium - USASpending only with reporting lag'
+                },
+                'risk_detection': {
+                    'enhanced': 'Comprehensive - Multiple risk factors',
+                    'times_style': 'Focused - Renewal delays only',
+                    'legacy': 'Limited - Disbursement delays only'
+                },
+                'real_time_capability': {
+                    'enhanced': 'High - Fresh API data with caching',
+                    'times_style': 'High - Fresh API data',
+                    'legacy': 'Medium - 1-month reporting lag'
+                },
+                'recommended_use': {
+                    'enhanced': 'Primary analysis for comprehensive risk assessment',
+                    'times_style': 'Detailed renewal pattern investigation',
+                    'legacy': 'Cash flow verification and historical comparison'
+                }
+            }
         }
-    
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing data: {str(e)}")
-
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
-
-@app.get("/api/test-scibert")
-async def test_scibert_classifier(text: str):
-    """
-    Test endpoint for SciBERT department classification.
-    Usage: /api/test-scibert?text=protein folding molecular dynamics
-    """
-    try:
-        result = predict_department_scibert(text)
+        print(f"Error in methodology comparison: {e}")
         return {
-            "input_text": text,
-            "result": result
+            'institution': institution_name,
+            'error': f'Methodology comparison failed: {str(e)}',
+            'analysis_date': datetime.now().isoformat()
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in SciBERT classification: {str(e)}")
 
-@app.get("/api/train-classifier")
-async def train_scibert_classifier(force_retrain: bool = False):
-    """
-    Train or retrain the SciBERT classifier.
-    Usage: /api/train-classifier?force_retrain=true
-    """
-    try:
-        train_classifier(force_retrain=force_retrain)
-        return {
-            "status": "success",
-            "message": "Classifier training completed"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error training classifier: {str(e)}")
-
-@app.get("/api/test-pi-lookup")
-async def test_pi_lookup(name: str, institution: str, force_refresh: bool = False):
-    """
-    Test endpoint for PI department lookup.
-    Usage: /api/test-pi-lookup?name=Jennifer Doudna&institution=UC Berkeley&force_refresh=true
-    """
-    try:
-        result = await get_pi_department(name, institution, force_refresh=force_refresh)
-        return {
-            "pi_name": name,
-            "institution": institution,
-            "force_refresh": force_refresh,
-            "result": result
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in PI lookup: {str(e)}")
-
-@app.post("/api/test-multiple-lookups")
-async def test_multiple_lookups(force_refresh: bool = False):
-    """
-    Test multiple PI lookups to verify the enhanced classification system.
-    This is useful for testing cache regeneration and classification accuracy.
-    """
-    try:
-        test_cases = [
-            ("Kjersti Aagaard", "Baylor College of Medicine"),
-            ("aagaard, kjersti marie", "baylor college of medicine"),  # Test name normalization
-            ("Jennifer Doudna", "University of California, Berkeley"),
-            ("Craig Venter", "J. Craig Venter Institute"),
-            ("Frances Arnold", "California Institute of Technology"),
-            ("George Church", "Harvard Medical School")
-        ]
-        
-        results = []
-        for name, institution in test_cases:
-            try:
-                result = await get_pi_department(name, institution, force_refresh=force_refresh)
-                results.append({
-                    "pi_name": name,
-                    "institution": institution,
-                    "result": result
-                })
-            except Exception as e:
-                results.append({
-                    "pi_name": name,
-                    "institution": institution,
-                    "error": str(e)
-                })
-        
-        return {
-            "status": "success",
-            "test_cases": len(test_cases),
-            "force_refresh": force_refresh,
-            "results": results
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in multiple PI lookup test: {str(e)}")
-        for name, institution in test_cases:
-            try:
-                result = await get_pi_department(name, institution, force_refresh=force_refresh)
-                results.append({
-                    "pi_name": name,
-                    "institution": institution,
-                    "result": result
-                })
-            except Exception as e:
-                results.append({
-                    "pi_name": name,
-                    "institution": institution,
-                    "error": str(e)
-                })
-        
-        return {
-            "status": "success",
-            "test_cases": len(test_cases),
-            "force_refresh": force_refresh,
-            "results": results
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in multiple PI lookup test: {str(e)}")
-
-@app.post("/api/refresh-specific-pi")
-async def refresh_specific_pi(name: str, institution: str):
-    """
-    Force refresh a specific PI's department classification.
-    Usage: POST /api/refresh-specific-pi?name=Kjersti Aagaard&institution=Baylor College of Medicine
-    """
-    try:
-        # Force refresh this specific PI
-        result = await get_pi_department(name, institution, force_refresh=True)
-        
-        return {
-            "status": "success",
-            "pi_name": name,
-            "institution": institution,
-            "message": "PI department classification refreshed with latest enhanced system",
-            "result": result
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error refreshing PI: {str(e)}")
-
-@app.get("/api/test-grant-mining")
-async def test_grant_mining(name: str, institution: str):
-    """
-    Test endpoint for grant database mining.
-    Usage: /api/test-grant-mining?name=Jennifer Doudna&institution=University of California, Berkeley
-    """
-    try:
-        from grant_mining import classify_pi_from_grants
-        
-        result = await classify_pi_from_grants(name, institution)
-        return {
-            "pi_name": name,
-            "institution": institution,
-            "grant_mining_result": result
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in grant mining: {str(e)}")
-
-@app.get("/api/collect-training-data")
-async def collect_training_data():
-    """
-    Collect training data from external sources (university descriptions, arXiv mappings, etc.).
-    This expands the training dataset beyond ORCID data.
-    """
-    try:
-        from training_data_sources import TrainingDataCollector
-        
-        collector = TrainingDataCollector()
-        data = await collector.collect_all_data()
-        
-        # Save the enhanced training data
-        final_data = collector.save_training_data(data)
-        
-        # Get statistics
-        from collections import Counter
-        label_counts = Counter(final_data['labels'])
-        
-        return {
-            "status": "success",
-            "message": "Training data collected and saved",
-            "total_examples": len(final_data['texts']),
-            "distribution": dict(label_counts.most_common()),
-            "sources": ["university_descriptions", "arxiv_mappings", "synthetic_examples"]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error collecting training data: {str(e)}")
-
-@app.post("/api/cache/clear")
+@app.delete("/api/cache/clear")
 async def clear_cache():
-    """
-    Clear the entire PI department cache.
-    This will force all future lookups to use the improved classification system.
-    """
+    """Clear all caches"""
     try:
-        from cache_refresh import CacheManager
-        import os
-        
-        manager = CacheManager()
-        success = manager.clear_cache()
-        
-        # Ensure the cache file is completely removed
-        cache_file = "pi_department_cache.json"
-        if os.path.exists(cache_file):
-            os.remove(cache_file)
-        
+        clear_optimized_cache()
+        return {"success": True, "message": "All caches cleared successfully"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/cache/status")
+async def get_cache_status():
+    """Get cache status information"""
+    try:
+        from optimized_cache import get_cache_stats
+        stats = get_cache_stats()
         return {
-            "status": "success",
-            "message": "Cache cleared successfully. New lookups will use the improved classification system with fresh ORCID and enhanced SciBERT analysis.",
-            "note": "Next lookup will regenerate the cache with the latest classification improvements."
+            "cache_type": "optimized_dictionary_based",
+            "performance": "O(1) lookups",
+            "stats": stats
         }
+    except Exception as e:
+        return {"error": str(e)}
+
+def match_pi_to_department(pi_name: str, institution: str, pi_cache: dict) -> str:
+    """Match a PI to their department using the cached data"""
+    if not pi_name or not institution:
+        return "Unknown Department"
+    
+    # Simple lookup in the cache
+    pi_name_normalized = pi_name.lower().strip()
+    institution_normalized = institution.lower().strip()
+    
+    for key, data in pi_cache.items():
+        if '|' in key:
+            cached_pi, cached_inst = key.split('|', 1)
+            if (cached_inst.strip().lower() == institution_normalized and 
+                pi_name_normalized in cached_pi.lower()):
+                return data.get('department', 'Unknown Department')
+    
+    return "Unknown Department"
+
+@app.get("/api/university-details/{institution_name}")
+async def get_university_details(institution_name: str):
+    """Get detailed information about a university using comprehensive multi-source data fetching"""
+    try:
+        print(f"Fetching comprehensive details for: {institution_name}")
+        
+        # Import required functions
+        from layoff_estimator import (
+            fetch_terminated_grants, 
+            normalize_institution_name,
+            calculate_funding_cliff,
+            estimate_lab_size
+        )
+        from grant_cache import get_combined_cache
+        
+        # Normalize the institution name
+        normalized_institution = normalize_institution_name(institution_name)
+        
+        # Strategy 1: Use fresh NIH/NSF cache data
+        print("🎯 Using fresh NIH/NSF grant data...")
+        combined_grants = get_combined_cache()
+        
+        institution_active_grants = []
+        institution_terminated_grants = []
+        
+        if combined_grants:
+            print(f"📊 Analyzing {len(combined_grants)} fresh grants from NIH/NSF APIs")
+            
+            # Filter grants for this institution from fresh NIH/NSF data
+            for grant in combined_grants:
+                try:
+                    org_info = grant.get('organization', {})
+                    org_name = ''
+                    
+                    if isinstance(org_info, list) and org_info:
+                        # Handle list format
+                        first_org = org_info[0]
+                        if isinstance(first_org, dict):
+                            org_name = first_org.get('org_name', '')
+                        elif isinstance(first_org, str):
+                            org_name = first_org
+                    elif isinstance(org_info, dict):
+                        # Handle dict format
+                        org_name = org_info.get('org_name', '')
+                    elif isinstance(org_info, str):
+                        # Handle string format
+                        org_name = org_info
+                    
+                    if not org_name:
+                        continue
+                    
+                    if normalize_institution_name(org_name) == normalized_institution:
+                        # Check if grant is active or terminated based on status/end date
+                        status = grant.get('project_end_date', '')
+                        award_status = grant.get('award_status', '').lower()
+                        
+                        if award_status in ['terminated', 'cancelled', 'expired']:
+                            institution_terminated_grants.append(grant)
+                        else:
+                            institution_active_grants.append(grant)
+                            
+                except Exception as e:
+                    print(f"⚠️ Error processing grant: {e}")
+                    continue
+        
+        # Strategy 2: Direct comprehensive API fetch for this specific institution
+        print(f"🔍 Fetching comprehensive grants directly for {institution_name}...")
+        try:
+            fresh_institution_grants = await fetch_comprehensive_institution_grants(institution_name, max_grants=12000)
+            if fresh_institution_grants:
+                print(f"✅ Found {len(fresh_institution_grants)} additional grants from direct API fetch")
+                
+                # Add to our collections
+                for grant in fresh_institution_grants:
+                    try:
+                        status = grant.get('project_end_date', '')
+                        award_status = grant.get('award_status', '').lower()
+                        
+                        # Check if we already have this grant
+                        project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                        existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_active_grants + institution_terminated_grants]
+                        
+                        if project_num not in existing_nums:
+                            if award_status in ['terminated', 'cancelled', 'expired']:
+                                institution_terminated_grants.append(grant)
+                            else:
+                                institution_active_grants.append(grant)
+                    except Exception as e:
+                        print(f"⚠️ Error processing fresh grant: {e}")
+                        continue
+        except Exception as e:
+            print(f"⚠️ Direct comprehensive API fetch failed: {e}")
+        
+        # Strategy 3: Enhanced terminated grants fetch
+        print("🔍 Fetching comprehensive terminated grants...")
+        try:
+            enhanced_terminated = await fetch_additional_terminated_grants(institution_name)
+            if enhanced_terminated:
+                print(f"📋 Adding {len(enhanced_terminated)} additional terminated grants")
+                # Remove duplicates
+                existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_terminated_grants]
+                for grant in enhanced_terminated:
+                    project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                    if project_num not in existing_nums:
+                        institution_terminated_grants.append(grant)
+        except Exception as e:
+            print(f"⚠️ Enhanced terminated grants fetch failed: {e}")
+        
+        # Strategy 4: Legacy terminated grants for broader coverage
+        print("🔍 Fetching legacy terminated grants...")
+        try:
+            legacy_terminated_grants = await fetch_terminated_grants()
+            for grant in legacy_terminated_grants:
+                try:
+                    org_info = grant.get('organization', {})
+                    org_name = ''
+                    
+                    if isinstance(org_info, list) and org_info:
+                        first_org = org_info[0]
+                        if isinstance(first_org, dict):
+                            org_name = first_org.get('org_name', '')
+                        elif isinstance(first_org, str):
+                            org_name = first_org
+                    elif isinstance(org_info, dict):
+                        org_name = org_info.get('org_name', '')
+                    elif isinstance(org_info, str):
+                        org_name = org_info
+                    
+                    if not org_name:
+                        continue
+                    
+                    if normalize_institution_name(org_name) == normalized_institution:
+                        project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                        existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_terminated_grants]
+                        if project_num not in existing_nums:
+                            institution_terminated_grants.append(grant)
+                        
+                except Exception as e:
+                    print(f"⚠️ Error processing legacy terminated grant: {e}")
+                    continue
+        except Exception as e:
+            print(f"⚠️ Legacy terminated grants fetch failed: {e}")
+        
+        # Strategy 5: USASpending fallback if still not enough data
+        if len(institution_active_grants) < 50:
+            print("⚡ Supplementing with USASpending.gov data...")
+            try:
+                from layoff_estimator import fetch_total_funding_grants
+                usaspending_grants = await fetch_total_funding_grants(active_only=True, max_records_per_source=5000)
+                
+                for grant in usaspending_grants:
+                    try:
+                        org_info = grant.get('organization', {})
+                        org_name = ''
+                        
+                        if isinstance(org_info, list) and org_info:
+                            first_org = org_info[0]
+                            if isinstance(first_org, dict):
+                                org_name = first_org.get('org_name', '')
+                            elif isinstance(first_org, str):
+                                org_name = first_org
+                        elif isinstance(org_info, dict):
+                            org_name = org_info.get('org_name', '')
+                        elif isinstance(org_info, str):
+                            org_name = org_info
+                        
+                        if not org_name:
+                            continue
+                        
+                        if normalize_institution_name(org_name) == normalized_institution:
+                            project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
+                            existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_active_grants]
+                            if project_num not in existing_nums:
+                                institution_active_grants.append(grant)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error processing USASpending grant: {e}")
+                        continue
+                        
+                print(f"✅ Added {len([g for g in usaspending_grants if normalize_institution_name(g.get('organization', {}).get('org_name', '')) == normalized_institution])} USASpending grants")
+            except Exception as e:
+                print(f"⚠️ USASpending supplement failed: {e}")
+        
+        # Combine all grants for comprehensive analysis
+        all_grants_for_institution = institution_active_grants + institution_terminated_grants
+        
+        print(f"🎯 Total grants collected: {len(all_grants_for_institution)} ({len(institution_active_grants)} active, {len(institution_terminated_grants)} terminated)")
+        
+        # Ensure we have meaningful data
+        if len(all_grants_for_institution) > 0:
+            print(f"🎯 Analyzing {len(all_grants_for_institution)} total grants using enhanced fresh data analysis")
+            
+            # Use enhanced analysis function with comprehensive grant data
+            result = await analyze_fresh_nih_nsf_data(institution_name, all_grants_for_institution, pi_cache=None)
+            return result
+        else:
+            print("⚠️ No grants found with comprehensive search, falling back to enhanced tracker")
+            
+            # Final fallback to comprehensive analysis
+            from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
+            enhanced_tracker = EnhancedDelayedFundingTracker()
+            return await enhanced_tracker.comprehensive_delayed_funding_analysis(
+                institution_name, 
+                force_fresh_analysis=True  # Force fresh analysis for better coverage
+            )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+        print(f"Error getting university details: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting university details: {str(e)}")
 
-@app.get("/api/cache/stats")
-async def get_cache_stats():
-    """Get statistics about the current cache state."""
+@app.get("/api/renewal-patterns-analysis")
+async def get_renewal_patterns_analysis(institutions: str = None):
+    """
+    Multi-institutional renewal patterns analysis (Times-style methodology)
+    
+    Query parameter:
+    - institutions: Comma-separated list of institution names
+    """
     try:
-        from cache_refresh import CacheManager
+        from enhanced_delayed_funding_tracker import analyze_institutional_renewal_patterns
         
-        manager = CacheManager()
-        stats = manager.get_cache_stats()
+        # Parse institutions
+        if not institutions:
+            institution_list = [
+                "Harvard University",
+                "Stanford University", 
+                "Massachusetts Institute of Technology",
+                "University of California Berkeley",
+                "Yale University"
+            ]
+        else:
+            institution_list = [inst.strip() for inst in institutions.split(',')]
         
-        if "error" in stats:
-            return {"error": stats["error"]}
+        result = await analyze_institutional_renewal_patterns(institution_list)
+        return result
         
-        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error in renewal patterns analysis: {str(e)}")
+
+@app.get("/api/usaspending-stats")
+async def get_usaspending_cache_stats():
+    """Get detailed statistics about cached USASpending.gov data."""
+    try:
+        from usaspending_cache_loader import get_usaspending_stats
+        stats = get_usaspending_stats()
+        
+        return {
+            "cache_info": stats,
+            "message": "Comprehensive USASpending.gov funding data available"
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting cache stats: {str(e)}")
 
-@app.post("/api/cache/refresh-unknowns")
-async def refresh_unknown_pis():
-    return await _refresh_unknown_pis_impl()
-
-@app.get("/api/cache/refresh-unknowns")
-async def refresh_unknown_pis_get():
-    return await _refresh_unknown_pis_impl()
-
-async def _refresh_unknown_pis_impl():
-    """
-    Refresh all PIs marked as 'Unknown' in the cache using the improved classification system.
-    This is useful after enhancing thresholds or adding new classification methods.
-    """
+@app.get("/api/layoff-leaderboard")
+async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20):
+    """Get institutions ranked by layoff risk using comprehensive multi-agency data."""
     try:
-        import json
-        import os
-        cache_file = os.path.join(os.path.dirname(__file__), "pi_department_cache.json")
+        print(f"🚀 Starting layoff leaderboard request: cost_per_researcher={cost_per_researcher}, limit={limit}")
         
-        if not os.path.exists(cache_file):
-            return {"error": "Cache file not found", "refreshed": 0}
+        # Create cache key based on parameters
+        cache_key = f"layoff_leaderboard_{cost_per_researcher}_{limit}"
         
-        # Read current cache
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            cache = json.load(f)
+        # Try to get cached result first
+        cached_result = get_cached_general_data(cache_key)
+        if cached_result:
+            print(f"✅ Returning cached leaderboard data (key: {cache_key})")
+            # Update cache info to show it's cached
+            cached_result['cache_info'] = {
+                "cached": True,
+                "cache_key": cache_key,
+                "served_from_cache_at": datetime.now().isoformat()
+            }
+            return cached_result
         
-        unknown_entries = []
-        for key, entry in cache.items():
-            if entry.get('department') == 'Unknown':
-                # Parse the key to get name and institution
-                if '|' in key:
-                    name_normalized, institution = key.split('|', 1)
-                    # Convert normalized name back to readable format
-                    name_parts = name_normalized.split()
-                    if len(name_parts) == 2:
-                        name = f"{name_parts[1].title()} {name_parts[0].title()}"
-                    else:
-                        name = name_normalized.title()
-                    
-                    unknown_entries.append((name, institution.title(), key))
+        print("🔄 No cached data found, generating fresh leaderboard...")
         
-        refreshed_count = 0
-        successful_classifications = []
+        from layoff_estimator import generate_layoff_risk_leaderboard
+        print("✅ Successfully imported generate_layoff_risk_leaderboard")
         
-        # Refresh each unknown entry
-        for name, institution, cache_key in unknown_entries[:10]:  # Limit to 10 to avoid timeouts
-            try:
-                result = await get_pi_department(name, institution, force_refresh=True)
-                if result['department'] != 'Unknown':
-                    refreshed_count += 1
-                    successful_classifications.append({
-                        "name": name,
-                        "institution": institution,
-                        "old_department": "Unknown",
-                        "new_department": result['department'],
-                        "source": result['source'],
-                        "confidence": result['confidence']
-                    })
-            except Exception as e:
-                print(f"Error refreshing {name}: {e}")
-                continue
+        print("📊 Calling generate_layoff_risk_leaderboard...")
+        result = await generate_layoff_risk_leaderboard(cost_per_researcher, limit)
+        print("✅ generate_layoff_risk_leaderboard completed")
         
-        return {
-            "message": f"Refreshed {refreshed_count} out of {len(unknown_entries)} unknown PIs",
-            "total_unknown": len(unknown_entries),
-            "refreshed": refreshed_count,
-            "successful_classifications": successful_classifications,
-            "note": "Limited to 10 entries per request to avoid timeouts. Run again for more."
-        }
+        # Convert the format to match frontend expectations
+        if 'data' in result:
+            print("🔄 Converting data format for frontend...")
+            # The new format uses 'data' key, convert to 'institutions' for frontend compatibility
+            response_data = {
+                "institutions": result['data'],
+                "total_institutions": result.get('total_institutions', len(result['data'])),
+                "methodology": result.get('methodology', {}),
+                "last_updated": result.get('last_updated', datetime.now().isoformat()),
+                "cache_info": {
+                    "cached": False,
+                    "cache_key": cache_key,
+                    "generated_at": datetime.now().isoformat()
+                }
+            }
+            
+            # Cache the result for future requests
+            save_cached_general_data(cache_key, response_data)
+            print(f"✅ Cached leaderboard data (key: {cache_key})")
+            
+            print(f"✅ Returning {len(response_data['institutions'])} institutions")
+            return response_data
         
+        print("⚠️ No 'data' key in result, returning as-is")
+        return result
+        
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error refreshing unknowns: {str(e)}")
+        print(f"❌ Unexpected error in leaderboard endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
 
-async def fetch_active_grants(organization: str = None, pi_name: str = None) -> List[Dict[str, Any]]:
-    """Fetch currently active grants for analysis - now includes both NIH and NSF."""
-    from layoff_estimator import fetch_institution_grants
-    return await fetch_institution_grants(organization=organization, pi_name=pi_name, active_only=True)
-
-def estimate_lab_size(total_annual_funding: float, cost_per_researcher: float = 200000) -> Dict[str, Any]:
-    """
-    Estimate lab size based on total funding and cost per researcher.
-    Default: $200k/year per researcher (salary + benefits + overhead)
-    """
-    if total_annual_funding <= 0:
-        return {
-            "estimated_researchers": 0,
-            "funding_per_researcher": cost_per_researcher,
-            "total_funding": total_annual_funding
-        }
-    
-    estimated_count = total_annual_funding / cost_per_researcher
-    
-    return {
-        "estimated_researchers": round(estimated_count, 1),
-        "funding_per_researcher": cost_per_researcher,
-        "total_funding": total_annual_funding,
-        "confidence": "medium" if total_annual_funding > 500000 else "low"
-    }
-
-def calculate_funding_cliff(grants: List[Dict[str, Any]], months_ahead: int = 12) -> Dict[str, Any]:
-    """
-    Calculate what percentage of funding is set to expire in the next N months.
-    """
-    cutoff_date = datetime.now() + timedelta(days=months_ahead * 30)
-    
-    total_funding = 0
-    expiring_funding = 0
-    expiring_grants = []
-    
-    for grant in grants:
-        # Parse award amount
-        award_amount = 0
-        if grant.get("award_amount"):
-            try:
-                award_amount = float(grant["award_amount"])
-            except (ValueError, TypeError):
-                continue
-        
-        total_funding += award_amount
-        
-        # Check if grant expires soon
-        end_date_str = grant.get("project_end_date")
-        if end_date_str:
-            try:
-                end_date = datetime.strptime(end_date_str[:10], "%Y-%m-%d")
-                if end_date <= cutoff_date:
-                    expiring_funding += award_amount
-                    expiring_grants.append({
-                        "title": grant.get("project_title", "Unknown"),
-                        "pi": grant.get("contact_pi_name", "Unknown"),
-                        "amount": award_amount,
-                        "end_date": end_date_str
-                    })
-            except ValueError:
-                continue
-    
-    cliff_percentage = (expiring_funding / total_funding * 100) if total_funding > 0 else 0
-    
-    return {
-        "total_funding": total_funding,
-        "expiring_funding": expiring_funding,
-        "cliff_percentage": round(cliff_percentage, 1),
-        "expiring_grants": expiring_grants,
-        "months_ahead": months_ahead
-    }
-
-# Grant Cache Management Endpoints
-@app.get("/api/grant-cache/status")
-async def get_grant_cache_status():
-    """Get status of grant data cache."""
+@app.post("/api/clear-leaderboard-cache")
+async def clear_leaderboard_cache():
+    """Clear the cached leaderboard data to force fresh generation."""
     try:
-        status = get_cache_status()
+        # Clear all leaderboard-related cache entries
+        cache_patterns = ["layoff_leaderboard_"]
+        cleared_count = 0
+        
+        # This is a simple implementation - in a production system, you might want
+        # more sophisticated cache pattern matching
+        for pattern in cache_patterns:
+            # Try common parameter combinations
+            common_params = [
+                (200000, 20), (200000, 25), (200000, 10), (200000, 50),
+                (150000, 20), (250000, 20), (300000, 20)
+            ]
+            
+            for cost, limit in common_params:
+                cache_key = f"layoff_leaderboard_{cost}_{limit}"
+                if get_cached_general_data(cache_key):
+                    # Clear by saving empty data with 0 TTL
+                    save_cached_general_data(cache_key, None, ttl_hours=0)
+                    cleared_count += 1
+        
         return {
-            "cache_status": status,
-            "cache_duration_hours": 6,
-            "description": "Cache status for NIH, NSF, and combined grant data"
+            "status": "success",
+            "cleared_entries": cleared_count,
+            "message": f"Cleared {cleared_count} leaderboard cache entries",
+            "timestamp": datetime.now().isoformat()
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting cache status: {str(e)}")
-
-@app.post("/api/grant-cache/clear")
-async def clear_grant_cache():
-    """Clear all grant data cache."""
-    try:
-        clear_cache()
-        return {"message": "Grant cache cleared successfully"}
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
-@app.post("/api/grant-cache/refresh")
-async def refresh_grant_cache(max_records_per_source: int = 10000):
-    """Force refresh of grant data cache with more records."""
-    try:
-        from layoff_estimator import fetch_total_funding_grants
-        
-        # Clear existing cache and fetch fresh data
-        clear_cache()
-        
-        # Fetch comprehensive funding data for cache
-        grants = await fetch_total_funding_grants(
-            use_cache=False, 
-            max_records_per_source=max_records_per_source
-        )
-        
-        nih_count = len([g for g in grants if g.get("funding_agency") == "NIH"])
-        nsf_count = len([g for g in grants if g.get("funding_agency") == "NSF"])
-        
-        return {
-            "message": "Grant cache refreshed successfully",
-            "total_grants": len(grants),
-            "nih_grants": nih_count,
-            "nsf_grants": nsf_count,
-            "max_records_per_source": max_records_per_source
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
-
-@app.get("/api/lab-size-estimator")
-async def estimate_lab_impact(institution: str, cost_per_researcher: float = 200000):
-    """
-    Estimate lab sizes and potential layoff impact for an institution.
-    Usage: /api/lab-size-estimator?institution=Harvard University&cost_per_researcher=200000
-    """
-    try:
-        # Fetch active grants for the institution
-        active_grants = await fetch_active_grants(organization=institution)
-        terminated_grants = await fetch_terminated_grants()
-        
-        if not active_grants and not terminated_grants:
-            return {
-                "error": "No grant data found for this institution",
-                "institution": institution
-            }
-        
-        # Calculate current lab size based on active funding
-        total_active_funding = sum(
-            float(grant.get("award_amount", 0)) 
-            for grant in active_grants 
-            if grant.get("award_amount")
-        )
-        
-        lab_size = estimate_lab_size(total_active_funding, cost_per_researcher)
-        
-        # Calculate funding cliff (grants expiring in next 12 months)
-        cliff_analysis = calculate_funding_cliff(active_grants, months_ahead=12)
-        
-        # Calculate recent funding loss from terminated grants
-        terminated_funding = sum(
-            float(grant.get("award_amount", 0))
-            for grant in terminated_grants
-            if grant.get("award_amount") and grant.get("organization", [{}])[0].get("org_name") == institution
-        )
-        
-        # Estimate at-risk positions
-        at_risk_positions = cliff_analysis["expiring_funding"] / cost_per_researcher
-        recent_lost_positions = terminated_funding / cost_per_researcher
-        
-        return {
-            "institution": institution,
-            "current_lab_size": lab_size,
-            "funding_cliff": cliff_analysis,
-            "layoff_risk": {
-                "at_risk_positions": round(at_risk_positions, 1),
-                "recently_lost_positions": round(recent_lost_positions, 1),
-                "risk_level": "HIGH" if cliff_analysis["cliff_percentage"] > 50 else "MEDIUM" if cliff_analysis["cliff_percentage"] > 25 else "LOW"
-            },
-            "methodology": {
-                "cost_per_researcher": cost_per_researcher,
-                "analysis_window": "12 months ahead",
-                "confidence": lab_size.get("confidence", "medium")
-            },
-            "last_updated": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error estimating lab impact: {str(e)}")
-
-@app.get("/api/pi-lab-analysis") 
-async def analyze_pi_lab(pi_name: str, institution: str, cost_per_researcher: float = 200000):
-    """
-    Analyze a specific PI's lab for funding and layoff risk.
-    Usage: /api/pi-lab-analysis?pi_name=Jennifer Doudna&institution=University of California, Berkeley
-    """
-    try:
-        # Fetch grants for this specific PI
-        active_grants = await fetch_active_grants(pi_name=pi_name)
-        
-        # Filter by institution if needed
-        if institution:
-            active_grants = [
-                grant for grant in active_grants
-                if any(institution.lower() in org.get("org_name", "").lower() 
-                      for org in (grant.get("organization", []) if isinstance(grant.get("organization"), list) 
-                                else [grant.get("organization", {})]))
-            ]
-        
-        if not active_grants:
-            return {
-                "error": f"No active grants found for {pi_name} at {institution}",
-                "pi_name": pi_name,
-                "institution": institution
-            }
-        
-        # Calculate PI's lab funding and size
-        total_funding = sum(
-            float(grant.get("award_amount", 0))
-            for grant in active_grants
-            if grant.get("award_amount")
-        )
-        
-        lab_size = estimate_lab_size(total_funding, cost_per_researcher)
-        cliff_analysis = calculate_funding_cliff(active_grants, months_ahead=12)
-        
-        # Get department classification
-        dept_result = await get_pi_department(pi_name, institution)
-        
-        return {
-            "pi_name": pi_name,
-            "institution": institution,
-            "department": dept_result.get("department", "Unknown"),
-            "lab_analysis": {
-                "estimated_lab_size": lab_size,
-                "funding_cliff": cliff_analysis,
-                "grant_count": len(active_grants),
-                "funding_diversification": "HIGH" if len(active_grants) >= 3 else "MEDIUM" if len(active_grants) == 2 else "LOW"
-            },
-            "layoff_risk": {
-                "at_risk_positions": round(cliff_analysis["expiring_funding"] / cost_per_researcher, 1),
-                "risk_level": "HIGH" if cliff_analysis["cliff_percentage"] > 60 else "MEDIUM" if cliff_analysis["cliff_percentage"] > 30 else "LOW",
-                "primary_risk_factor": "Funding concentration" if len(active_grants) <= 2 else "Funding cliff" if cliff_analysis["cliff_percentage"] > 40 else "Normal"
-            },
-            "grants": [
-                {
-                    "title": grant.get("project_title", "Unknown")[:100] + "...",
-                    "amount": grant.get("award_amount"),
-                    "end_date": grant.get("project_end_date"),
-                    "fiscal_year": grant.get("fiscal_year")
-                }
-                for grant in active_grants[:5]  # Show top 5 grants
-            ],
-            "last_updated": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error analyzing PI lab: {str(e)}")
-
 @app.get("/api/test-combined-grants")
 async def test_combined_grants_endpoint():
-    """Test endpoint to verify funding data separation."""
+    """Test endpoint to verify enhanced multi-agency grant fetching."""
     try:
+        # Test both data sources
         from layoff_estimator import fetch_institution_grants, fetch_total_funding_grants
         
-        # Test institution grants (NIH + NSF)
+        # Institution analysis grants (NIH + NSF)
         institution_grants = await fetch_institution_grants(active_only=True, max_records_per_source=100)
-        institution_nih = sum(1 for g in institution_grants if g.get("funding_agency") == "NIH")
-        institution_nsf = sum(1 for g in institution_grants if g.get("funding_agency") == "NSF")
         
-        # Test total funding grants (all agencies)
-        total_funding_grants = await fetch_total_funding_grants(active_only=True, max_records_per_source=100)
-        
-        # Count agencies in total funding
-        agency_counts = {}
-        for grant in total_funding_grants:
-            agency = grant.get("funding_agency", "UNKNOWN")
-            agency_counts[agency] = agency_counts.get(agency, 0) + 1
+        # Total funding grants (all agencies)
+        funding_grants = await fetch_total_funding_grants(active_only=True, max_records_per_source=100)
         
         return {
-            "status": "success",
-            "institution_analysis": {
-                "total_grants": len(institution_grants),
-                "nih_grants": institution_nih,
-                "nsf_grants": institution_nsf,
-                "data_source": "NIH Reporter API + NSF Awards API"
+            "institution_grants": {
+                "count": len(institution_grants),
+                "sample": institution_grants[:3] if institution_grants else [],
+                "agencies": list(set(g.get('funding_agency', 'Unknown') for g in institution_grants))
             },
-            "total_funding": {
-                "total_grants": len(total_funding_grants),
-                "agency_breakdown": agency_counts,
-                "data_source": "USASpending.gov API"
+            "funding_grants": {
+                "count": len(funding_grants),
+                "sample": funding_grants[:3] if funding_grants else [],
+                "agencies": list(set(g.get('funding_agency', 'Unknown') for g in funding_grants))
             },
-            "architecture": "Separated data sources for different use cases"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error testing combined grants: {str(e)}")
-
-@app.get("/api/layoff-leaderboard")
-async def get_layoff_risk_leaderboard(cost_per_researcher: float = 200000, limit: int = 20):
-    """ Get institutions ranked by layoff risk using combined NIH+NSF data. """
-    try:
-        from layoff_estimator import generate_layoff_risk_leaderboard
-        return await generate_layoff_risk_leaderboard(cost_per_researcher, limit)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating leaderboard: {str(e)}")
-
-@app.get("/api/institution-details")
-async def get_institution_details(institution: str, include_cancelled: bool = False):
-    """
-    Get detailed information about a specific institution including PI details from cache.
-    Uses the pi_department_cache to get enhanced PI information.
-    
-    Args:
-        institution: Institution name to analyze
-        include_cancelled: Whether to include cancelled/terminated grants in the response
-    """
-    try:
-        from layoff_estimator import fetch_combined_grants, fetch_terminated_grants
-        from grant_cache import get_cache_status, clear_cache
-        import json
-        
-        # Fetch active grants for this institution
-        active_grants = await fetch_combined_grants(organization=institution, active_only=True)
-        
-        # Optionally fetch terminated grants if requested
-        terminated_grants = []
-        if include_cancelled:
-            terminated_grants = await fetch_terminated_grants()
-            # Filter terminated grants to this institution
-            terminated_grants = [
-                grant for grant in terminated_grants
-                if institution.lower() in str(grant.get("organization", {})).lower()
-            ]
-        
-        if not active_grants and not terminated_grants:
-            raise HTTPException(status_code=404, detail=f"No grant data found for institution: {institution}")
-        
-        # Group grants by funding agency
-        agency_breakdown = defaultdict(lambda: {"grants": [], "total_funding": 0, "active_funding": 0, "cancelled_funding": 0})
-        
-        # Process active grants
-        for grant in active_grants:
-            agency = grant.get("funding_agency", "UNKNOWN")
-            agency_breakdown[agency]["grants"].append({**grant, "status": "active"})
-            amount = float(grant.get("award_amount", 0))
-            agency_breakdown[agency]["total_funding"] += amount
-            agency_breakdown[agency]["active_funding"] += amount
-        
-        # Process terminated grants if included
-        for grant in terminated_grants:
-            agency = grant.get("funding_agency", "NIH")  # Terminated grants are typically NIH from our current API
-            agency_breakdown[agency]["grants"].append({**grant, "status": "terminated"})
-            amount = float(grant.get("award_amount", 0))
-            agency_breakdown[agency]["total_funding"] += amount
-            agency_breakdown[agency]["cancelled_funding"] += amount
-        
-        # Calculate summary statistics
-        total_active_funding = sum(data["active_funding"] for data in agency_breakdown.values())
-        total_cancelled_funding = sum(data["cancelled_funding"] for data in agency_breakdown.values())
-        
-        # Calculate funding diversification percentages
-        funding_diversification = {}
-        if total_active_funding > 0:
-            for agency, data in agency_breakdown.items():
-                funding_diversification[f"{agency.lower()}_funding"] = data["active_funding"]
-                funding_diversification[f"{agency.lower()}_percentage"] = round(data["active_funding"] / total_active_funding * 100, 1)
-        
-        # Count agencies with active funding
-        agencies_with_funding = len([agency for agency, data in agency_breakdown.items() if data["active_funding"] > 0])
-        funding_diversification["agencies_with_funding"] = agencies_with_funding
-        
-        # Load PI department cache for enhanced information
-        pi_cache_file = "pi_department_cache.json"
-        pi_departments = {}
-        try:
-            with open(pi_cache_file, 'r') as f:
-                pi_cache = json.load(f)
-                # Extract PI information for this institution
-                for pi_name, pi_data in pi_cache.items():
-                    if pi_data.get("institution", "").lower() == institution.lower():
-                        pi_departments[pi_name] = pi_data
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
-        
-        response = {
-            "institution": institution,
-            "active_grants_count": len(active_grants),
-            "terminated_grants_count": len(terminated_grants) if include_cancelled else 0,
-            "total_active_funding": total_active_funding,
-            "total_cancelled_funding": total_cancelled_funding if include_cancelled else 0,
-            "funding_diversification": funding_diversification,
-            "agency_breakdown": dict(agency_breakdown) if include_cancelled else {
-                agency: {
-                    "grants": [g for g in data["grants"] if g.get("status") == "active"],
-                    "total_funding": data["active_funding"],
-                    "active_funding": data["active_funding"]
-                }
-                for agency, data in agency_breakdown.items()
-                if data["active_funding"] > 0
-            },
-            "pi_departments": pi_departments,
-            "last_updated": datetime.now().isoformat(),
-            "include_cancelled": include_cancelled
+            "total_records": len(institution_grants) + len(funding_grants),
+            "test_status": "success"
         }
         
-        return response
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting institution details: {str(e)}")
-        
+        raise HTTPException(status_code=500, detail=f"Error in test endpoint: {str(e)}")
+
+@app.get("/api/cache-refresh")
+async def refresh_cache():
+    """Refresh all grant caches using the enhanced async cache builder."""
     try:
-        from layoff_estimator import fetch_combined_grants
-        import json
-        import os
+        print("🔄 Starting enhanced cache refresh...")
         
-        # Fetch grants for this institution
-        active_grants = await fetch_combined_grants(organization=institution, active_only=True)
+        # Import and run the enhanced cache builder
+        import subprocess
+        import sys
         
-        if not active_grants:
+        # Run the enhanced cache builder as a subprocess
+        result = subprocess.run([
+            sys.executable, "enhanced_cache_builder.py"
+        ], capture_output=True, text=True, cwd=".")
+        
+        if result.returncode == 0:
+            # Get cache status after refresh
+            from grant_cache import get_cache_status
+            cache_status = get_cache_status()
+            
             return {
-                "error": f"No grants found for {institution}",
-                "institution": institution
+                "success": True,
+                "message": "Enhanced cache refresh completed successfully",
+                "cache_status": cache_status,
+                "output": result.stdout[-1000:] if result.stdout else "",  # Last 1000 chars
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Cache refresh failed",
+                "stderr": result.stderr,
+                "stdout": result.stdout
+            }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error refreshing cache: {str(e)}"
+        }
+
+@app.get("/api/institution-grants/{institution}")
+async def get_institution_grants_endpoint(institution: str, limit: int = 100):
+    """Get grants for a specific institution from enhanced cache."""
+    try:
+        from grant_cache import get_combined_cache
+        from layoff_estimator import normalize_institution_name
+        
+        cached_data = get_combined_cache()
+        
+        if not cached_data:
+            return {
+                "error": "No cached grant data available",
+                "note": "Run /api/cache-refresh to populate cache"
             }
         
-        # Load PI department cache to get detailed PI information
-        cache_file = os.path.join(os.path.dirname(__file__), "pi_department_cache.json")
-        pi_cache = {}
-        if os.path.exists(cache_file):
-            try:
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    pi_cache = json.load(f)
-            except Exception as e:
-                print(f"Error loading PI cache: {e}")
+        # Filter for the specific institution
+        institution_grants = []
+        normalized_institution = normalize_institution_name(institution)
         
-        # Group grants by PI and collect detailed information
-        pi_details = {}
-        
-        for grant in active_grants:
-            pi_name = grant.get("contact_pi_name", "Unknown")
-            if not pi_name or pi_name == "Unknown":
+        for grant in cached_data:
+            org_info = grant.get("organization", {})
+            if isinstance(org_info, list) and len(org_info) > 0:
+                org_name = org_info[0].get("org_name", "")
+            elif isinstance(org_info, dict):
+                org_name = org_info.get("org_name", "")
+            else:
                 continue
                 
-            if pi_name not in pi_details:
-                # Look up PI in cache
-                pi_info = {"department": "Unknown", "source": "none", "confidence": "none"}
+            if normalized_institution.lower() in normalize_institution_name(org_name).lower():
+                institution_grants.append(grant)
                 
-                # Try to find PI in cache (normalize name for lookup)
-                normalized_name = pi_name.lower().strip()
-                for key in pi_cache.keys():
-                    if institution.lower() in key.lower() and normalized_name in key.lower():
-                        pi_info = pi_cache[key]
-                        break
-                
-                pi_details[pi_name] = {
-                    "name": pi_name,
-                    "department": pi_info.get("department", "Unknown"),
-                    "source": pi_info.get("source", "none"),
-                    "confidence": pi_info.get("confidence", "none"),
-                    "grants": [],
-                    "total_funding": 0,
-                    "grant_count": 0
-                }
-            
-            # Add grant to PI
-            try:
-                grant_amount = float(grant.get("award_amount", 0))
-                pi_details[pi_name]["total_funding"] += grant_amount
-                pi_details[pi_name]["grant_count"] += 1
-                pi_details[pi_name]["grants"].append({
-                    "title": grant.get("project_title", "Unknown"),
-                    "amount": grant_amount,
-                    "agency": grant.get("funding_agency", "Unknown"),
-                    "end_date": grant.get("project_end_date", "Unknown")
-                })
-            except (ValueError, TypeError):
-                pi_details[pi_name]["grant_count"] += 1
-                pi_details[pi_name]["grants"].append({
-                    "title": grant.get("project_title", "Unknown"),
-                    "amount": 0,
-                    "agency": grant.get("funding_agency", "Unknown"),
-                    "end_date": grant.get("project_end_date", "Unknown")
-                })
-        
-        # Sort PIs by total funding
-        sorted_pis = sorted(
-            pi_details.values(), 
-            key=lambda x: x["total_funding"], 
-            reverse=True
-        )
-        
-        # Add recent grants to each PI (top 3 most recent)
-        for pi in sorted_pis:
-            pi["recent_grants"] = sorted(
-                pi["grants"], 
-                key=lambda x: x.get("end_date", ""), 
-                reverse=True
-            )[:3]
+                if len(institution_grants) >= limit:
+                    break
         
         return {
             "institution": institution,
-            "pi_details": sorted_pis,
-            "total_pis": len(sorted_pis),
-            "total_grants": len(active_grants),
-            "total_funding": sum(pi["total_funding"] for pi in sorted_pis),
-            "department_breakdown": {
-                dept: len([pi for pi in sorted_pis if pi["department"] == dept])
-                for dept in set(pi["department"] for pi in sorted_pis)
-            },
-            "cache_info": {
-                "cache_entries": len(pi_cache),
-                "cache_hit_rate": len([pi for pi in sorted_pis if pi["source"] != "none"]) / len(sorted_pis) if sorted_pis else 0
-            },
-            "last_updated": datetime.now().isoformat()
+            "grants": institution_grants,
+            "count": len(institution_grants),
+            "limited_to": limit,
+            "cache_info": f"Searched {len(cached_data)} total grants"
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting institution details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting institution grants: {str(e)}")
 
-@app.post("/api/refresh-cache")
-async def refresh_grant_cache():
-    """Force refresh all grant caches and fetch fresh data from all APIs."""
+@app.get("/api/enhanced-delayed-funding/{institution_name}/csv")
+async def download_delayed_funding_csv(institution_name: str, method: str = "comprehensive"):
+    """Download delayed funding analysis as CSV."""
     try:
-        # Clear all caches
-        clear_cache()
+        # Get the analysis data
+        analysis_data = await get_comprehensive_delayed_funding_analysis(
+            institution_name=institution_name,
+            method=method,
+            include_departments=True
+        )
         
-        # Force fresh data fetch for total funding
-        from layoff_estimator import fetch_total_funding_grants
-        fresh_grants = await fetch_total_funding_grants(use_cache=False)
+        # Create CSV content
+        import io
+        import csv
         
-        # Count by agency
-        nih_count = len([g for g in fresh_grants if g.get("funding_agency") == "NIH"])
-        nsf_count = len([g for g in fresh_grants if g.get("funding_agency") == "NSF"])
-        dod_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOD"])
-        doe_count = len([g for g in fresh_grants if g.get("funding_agency") == "DOE"])
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['Institution', 'Analysis Date', 'Method', 'Total Risk', 'Department', 'PI Name', 'Funding at Risk'])
+        
+        # Write data rows
+        institution = analysis_data.get('institution', institution_name)
+        analysis_date = analysis_data.get('analysis_date', 'Unknown')
+        total_risk = analysis_data.get('total_funding_loss', 0)
+        
+        # Extract department and PI data
+        dept_breakdown = analysis_data.get('department_breakdown', {})
+        if dept_breakdown:
+            for dept_name, dept_data in dept_breakdown.items():
+                pis = dept_data.get('pis', [])
+                for pi_data in pis:
+                    writer.writerow([
+                        institution,
+                        analysis_date,
+                        method,
+                        total_risk,
+                        dept_name,
+                        pi_data.get('pi_name', 'Unknown'),
+                        pi_data.get('funding_at_risk', 0)
+                    ])
+        
+        # If no department breakdown, use summary data
+        if not dept_breakdown:
+            writer.writerow([
+                institution,
+                analysis_date,
+                method,
+                total_risk,
+                'Summary',
+                'N/A',
+                total_risk
+            ])
+        
+        csv_content = output.getvalue()
+        
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={institution_name.replace(' ', '_')}_delayed_funding.csv"
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating CSV: {str(e)}")
+
+@app.get("/api/pi-grant-details/{institution_name}/{pi_name}")
+async def get_pi_grant_details(institution_name: str, pi_name: str):
+    """Get detailed grant information for a specific PI, including cancelled and non-renewed grants."""
+    try:
+        print(f"Fetching PI details for: {pi_name} at {institution_name}")
+        
+        # First, try to get from cache for better performance
+        cached_details = get_cached_pi_details(institution_name, pi_name)
+        if cached_details:
+            print(f"✅ Returning cached details for {pi_name}")
+            return {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "total_lost_funding": cached_details.get('total_lost_funding', 0),
+                "cancelled_grants": cached_details.get('cancelled_grants', []),
+                "nonrenewal_grants": cached_details.get('nonrenewal_grants', []),
+                "department": cached_details.get('department', 'Unknown'),
+                "summary": {
+                    "total_grants_affected": len(cached_details.get('cancelled_grants', [])) + len(cached_details.get('nonrenewal_grants', [])),
+                    "cancelled_count": len(cached_details.get('cancelled_grants', [])),
+                    "nonrenewal_count": len(cached_details.get('nonrenewal_grants', [])),
+                    "total_funding_lost": cached_details.get('total_lost_funding', 0)
+                },
+                "source": "cache",
+                "note": "Data served from cache for optimal performance"
+            }
+        
+        print(f"⚠️ No cached data found for {pi_name}, checking main analysis cache...")
+        
+        # DEBUG: Show what PIs are actually in the cache
+        global pi_details_cache
+        institution_key = institution_name.lower().strip()
+        if institution_key in pi_details_cache:
+            cached_pis = list(pi_details_cache[institution_key].keys())
+            print(f"🔍 DEBUG: Found {len(cached_pis)} PIs in cache for {institution_name}:")
+            for cached_pi in cached_pis:
+                # Extract just the PI name part (after the |)
+                if '|' in cached_pi:
+                    pi_name_only = cached_pi.split('|', 1)[1]
+                    print(f"  - {pi_name_only}")
+                else:
+                    print(f"  - {cached_pi}")
+        else:
+            print(f"🔍 DEBUG: No cache entry found for institution {institution_name} (key: {institution_key})")
+        
+        # First, check if we have cached results from the main comprehensive analysis
+        # This avoids running duplicate analysis and ensures consistency
+        main_analysis_cache = get_cached_analysis(institution_name, "comprehensive", True)
+        
+        if main_analysis_cache:
+            print(f"✅ Found main analysis cache for {institution_name}, checking for PI data...")
+            # The main analysis should have populated the PI cache
+            cached_details_from_main = get_cached_pi_details(institution_name, pi_name)
+            if cached_details_from_main:
+                print(f"✅ Found {pi_name} in main analysis cache")
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "total_lost_funding": cached_details_from_main.get('total_lost_funding', 0),
+                    "cancelled_grants": cached_details_from_main.get('cancelled_grants', []),
+                    "nonrenewal_grants": cached_details_from_main.get('nonrenewal_grants', []),
+                    "department": cached_details_from_main.get('department', 'Unknown'),
+                    "summary": {
+                        "total_grants_affected": len(cached_details_from_main.get('cancelled_grants', [])) + len(cached_details_from_main.get('nonrenewal_grants', [])),
+                        "cancelled_count": len(cached_details_from_main.get('cancelled_grants', [])),
+                        "nonrenewal_count": len(cached_details_from_main.get('nonrenewal_grants', [])),
+                        "total_funding_lost": cached_details_from_main.get('total_lost_funding', 0)
+                    },
+                    "source": "main_analysis_cache",
+                    "note": "Data served from main comprehensive analysis cache"
+                }
+            else:
+                print(f"ℹ️ Main analysis exists but {pi_name} not found - PI may have no cancelled/non-renewal grants")
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "message": "PI analyzed in main comprehensive analysis but no cancelled or non-renewed grants found",
+                    "summary": {
+                        "total_grants_affected": 0,
+                        "cancelled_count": 0,
+                        "nonrenewal_count": 0,
+                        "total_funding_lost": 0
+                    },
+                    "source": "main_analysis_cache",
+                    "note": "PI has no problematic grants according to comprehensive analysis"
+                }
+        
+        print(f"⚠️ No main analysis cache found, running fresh comprehensive analysis...")
+        
+        # If no main analysis cache exists, we need to run the full institution analysis to get proper PI data
+        # This ensures we use the same sophisticated non-renewal detection as the main analysis
+        try:
+            # Fetch comprehensive grants for the institution (both active and terminated)
+            print(f"🔍 Fetching both active and terminated grants for {institution_name}...")
+            active_grants = await fetch_comprehensive_institution_grants(institution_name)
+            terminated_grants = await fetch_additional_terminated_grants(institution_name)
+            
+            # Combine both active and terminated grants for complete analysis
+            all_grants = active_grants + terminated_grants
+            print(f"Total grants found: {len(all_grants)} (active: {len(active_grants)}, terminated: {len(terminated_grants)})")
+            
+            if not all_grants:
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "message": "No grants found for this institution",
+                    "summary": {
+                        "total_grants_affected": 0,
+                        "cancelled_count": 0,
+                        "nonrenewal_count": 0,
+                        "total_funding_lost": 0
+                    }
+                }
+            
+            # Run the same comprehensive analysis as the main delayed funding endpoint
+            analysis_result = await analyze_fresh_nih_nsf_data(institution_name, all_grants)
+            
+            if not analysis_result or 'error' in analysis_result:
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "message": "Analysis failed for this institution",
+                    "error": analysis_result.get('error', 'Unknown error'),
+                    "summary": {
+                        "total_grants_affected": 0,
+                        "cancelled_count": 0,
+                        "nonrenewal_count": 0,
+                        "total_funding_lost": 0
+                    }
+                }
+            
+            # Now check if we have cached data after the analysis (it should be populated)
+            cached_details_after_analysis = get_cached_pi_details(institution_name, pi_name)
+            if cached_details_after_analysis:
+                print(f"✅ Found PI data in cache after analysis")
+                return {
+                    "pi_name": pi_name,
+                    "institution": institution_name,
+                    "total_lost_funding": cached_details_after_analysis.get('total_lost_funding', 0),
+                    "cancelled_grants": cached_details_after_analysis.get('cancelled_grants', []),
+                    "nonrenewal_grants": cached_details_after_analysis.get('nonrenewal_grants', []),
+                    "department": cached_details_after_analysis.get('department', 'Unknown'),
+                    "summary": {
+                        "total_grants_affected": len(cached_details_after_analysis.get('cancelled_grants', [])) + len(cached_details_after_analysis.get('nonrenewal_grants', [])),
+                        "cancelled_count": len(cached_details_after_analysis.get('cancelled_grants', [])),
+                        "nonrenewal_count": len(cached_details_after_analysis.get('nonrenewal_grants', [])),
+                        "total_funding_lost": cached_details_after_analysis.get('total_lost_funding', 0)
+                    },
+                    "source": "comprehensive_analysis",
+                    "note": "Generated from comprehensive institutional analysis"
+                }
+            
+            # If still no cache data, the PI might not have any cancelled/non-renewal grants
+            return {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "message": "No cancelled or non-renewed grants found for this PI after comprehensive analysis",
+                "summary": {
+                    "total_grants_affected": 0,
+                    "cancelled_count": 0,
+                    "nonrenewal_count": 0,
+                    "total_funding_lost": 0
+                },
+                "source": "comprehensive_analysis",
+                "note": "PI analyzed but no problematic grants found"
+            }
+            
+        except Exception as e:
+            print(f"Error in comprehensive analysis: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback to the old simple logic only if comprehensive analysis fails
+            print(f"⚠️ Falling back to simple grant analysis...")
+        
+        # EMERGENCY FALLBACK ONLY: Simple analysis (less sophisticated than main analysis)
+        # WARNING: This uses simplified non-renewal detection (6-month cutoff) 
+        # instead of the sophisticated EnhancedDelayedFundingTracker methodology
+        print("⚠️ Using emergency fallback with simplified methodology...")
+        
+        all_grants = await fetch_comprehensive_institution_grants(institution_name)
+        
+        print(f"Total grants found: {len(all_grants)}")
+        
+        # Initialize PI details structure
+        pi_details = {
+            "pi_name": pi_name,
+            "institution": institution_name,
+            "total_lost_funding": 0,
+            "cancelled_grants": [],
+            "nonrenewal_grants": [],
+            "department": "Unknown",
+            "summary": {
+                "total_grants_affected": 0,
+                "cancelled_count": 0,
+                "nonrenewal_count": 0,
+                "total_funding_lost": 0
+            },
+            "source": "emergency_fallback",
+            "warning": "Using simplified analysis methodology - may differ from main analysis results"
+        }
+        
+        # Analyze the raw grants data to find PI-specific grants
+        pi_name_normalized = pi_name.strip().lower()
+        print(f"Looking for PI: '{pi_name_normalized}'")
+        
+        # Search through all grants for this PI
+        found_grants = 0
+        for grant_data in all_grants:
+            grant_pi_name = (grant_data.get('contact_pi_name') or grant_data.get('pi_name') or grant_data.get('pdPIName') or '').strip().lower()
+            
+            if grant_pi_name == pi_name_normalized:
+                found_grants += 1
+                print(f"Found grant for PI: {grant_data.get('project_num') or grant_data.get('award_id')}")
+                
+                # Get department if we don't have it yet
+                if pi_details["department"] == "Unknown":
+                    try:
+                        from pi_department_lookup import get_department_string
+                        dept = get_department_string(grant_data.get('contact_pi_name') or grant_data.get('pi_name') or grant_data.get('pdPIName'), institution_name)
+                        if dept:
+                            pi_details["department"] = dept
+                    except:
+                        pass
+                
+                # Check if this is a cancelled/terminated grant
+                status = grant_data.get('award_status', '').lower()
+                is_cancelled = any(term in status for term in ['cancelled', 'terminated', 'suspend'])
+                
+                # Check if this is a non-renewal case (grant ended without renewal)
+                is_nonrenewal = False
+                end_date = grant_data.get('project_end_date') or grant_data.get('expDate')
+                if end_date and not is_cancelled:
+                    try:
+                        from datetime import datetime, timedelta
+                        if isinstance(end_date, str):
+                            # Handle various date formats
+                            if 'T' in end_date:
+                                end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                            else:
+                                end_date = datetime.strptime(end_date, '%Y-%m-%d')
+                        
+                        # Check if grant ended more than 6 months ago without renewal
+                        cutoff_date = datetime.now() - timedelta(days=180)
+                        if end_date < cutoff_date:
+                            is_nonrenewal = True
+                            print(f"Grant {grant_data.get('project_num')} marked as non-renewal (ended {end_date})")
+                    except Exception as e:
+                        print(f"Date parsing error: {e}")
+                        pass
+                
+                # Add grant to appropriate category
+                grant_details = {
+                    'award_id': grant_data.get('project_num') or grant_data.get('award_id') or grant_data.get('id'),
+                    'title': grant_data.get('project_title') or grant_data.get('title', ''),
+                    'abstract': grant_data.get('abstract_text') or grant_data.get('abstract', ''),
+                    'amount': grant_data.get('award_amount') or grant_data.get('total_cost') or grant_data.get('fundsObligatedAmt', 0),
+                    'fiscal_year': grant_data.get('fiscal_year'),
+                    'status': status or 'Unknown',
+                    'funding_agency': grant_data.get('funding_agency') or grant_data.get('agency', 'Unknown'),
+                    'start_date': grant_data.get('project_start_date') or grant_data.get('startDate'),
+                    'end_date': grant_data.get('project_end_date') or grant_data.get('expDate')
+                }
+                
+                if is_cancelled:
+                    pi_details["cancelled_grants"].append(grant_details)
+                    pi_details["total_lost_funding"] += grant_details["amount"]
+                    print(f"Added cancelled grant: {grant_details['award_id']}")
+                elif is_nonrenewal:
+                    pi_details["nonrenewal_grants"].append(grant_details)
+                    pi_details["total_lost_funding"] += grant_details["amount"]
+                    print(f"Added non-renewal grant: {grant_details['award_id']}")
+        
+        print(f"Found {found_grants} total grants for PI {pi_name}")
+        
+        # Update summary counts
+        pi_details["summary"]["cancelled_count"] = len(pi_details["cancelled_grants"])
+        pi_details["summary"]["nonrenewal_count"] = len(pi_details["nonrenewal_grants"])
+        pi_details["summary"]["total_grants_affected"] = (
+            pi_details["summary"]["cancelled_count"] + pi_details["summary"]["nonrenewal_count"]
+        )
+        pi_details["summary"]["total_funding_lost"] = pi_details["total_lost_funding"]
+        
+        # Enhanced grant details with department classification
+        all_grants_list = pi_details["cancelled_grants"] + pi_details["nonrenewal_grants"]
+        for grant in all_grants_list:
+            # Add grant type for easy identification
+            if grant in pi_details["cancelled_grants"]:
+                grant["grant_type"] = "cancelled"
+                grant["status"] = "Cancelled/Terminated"
+            else:
+                grant["grant_type"] = "non_renewal"
+                grant["status"] = "Non-Renewed"
+            
+            # Enhance with department classification if available
+            if grant.get('title') and grant.get('abstract'):
+                try:
+                    research_context = f"{grant.get('title', '')} {grant.get('abstract', '')}"
+                    dept_prediction = normalize_department_name(pi_details["department"], research_context)
+                    if dept_prediction and dept_prediction != "Unknown":
+                        grant["predicted_department"] = dept_prediction
+                except Exception as e:
+                    print(f"Error classifying grant department for {grant.get('award_id', 'unknown')}: {e}")
+                    grant["predicted_department"] = pi_details["department"]
+        
+        # If no grants found, return a not found response
+        if pi_details["summary"]["total_grants_affected"] == 0:
+            return {
+                "pi_name": pi_name,
+                "institution": institution_name,
+                "message": "No cancelled or non-renewed grants found for this PI",
+                "summary": pi_details["summary"],
+                "debug_info": f"Found {found_grants} total grants for PI, but none were cancelled or non-renewed"
+            }
+        
+        print(f"Returning {pi_details['summary']['total_grants_affected']} grants for {pi_name}")
+        return pi_details
+        
+    except Exception as e:
+        print(f"Error getting PI grant details: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error getting PI grant details: {str(e)}")
+
+@app.get("/api/debug-pis/{institution_name}")
+async def debug_pis(institution_name: str):
+    """Debug endpoint to see what PI names are in the raw grant data."""
+    try:
+        # Get all grant data
+        all_grants = await fetch_comprehensive_institution_grants(institution_name)
+        
+        # Get unique PI names
+        pi_names = set()
+        for grant in all_grants:
+            pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or grant.get('pdPIName') or '').strip()
+            if pi_name:
+                pi_names.add(pi_name)
+        
+        # Look for our target PIs
+        target_pis = ["NEAME, SIMON", "BERNDT, ANDRE", "FAIRHALL, ADRIENNE L"]
+        found_pis = []
+        for target in target_pis:
+            matches = [pi for pi in pi_names if target.lower() in pi.lower()]
+            found_pis.append({
+                "target": target,
+                "matches": matches,
+                "exact_match": target in pi_names
+            })
         
         return {
-            "status": "success",
-            "message": "Grant cache refreshed successfully",
-            "total_grants": len(fresh_grants),
-            "agency_breakdown": {
-                "NIH": nih_count,
-                "NSF": nsf_count,
-                "DOD": dod_count,
-                "DOE": doe_count
-            },
-            "refreshed_at": datetime.now().isoformat()
+            "total_grants": len(all_grants),
+            "total_unique_pis": len(pi_names),
+            "target_pi_analysis": found_pis,
+            "sample_pi_names": sorted(list(pi_names))[:20]
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error refreshing cache: {str(e)}")
-
-def group_grants_by_institution(active_grants, terminated_grants):
-    """
-    Group active and terminated grants by institution and sum funding.
-    Returns a dict mapping institution name to grant lists and funding totals.
-    """
-    institution_data = defaultdict(lambda: {
-        "active_grants": [],
-        "terminated_grants": [],
-        "total_active_funding": 0,
-        "total_terminated_funding": 0
-    })
-    
-    def extract_name(org_info):
-        if isinstance(org_info, list) and org_info:
-            return org_info[0].get("org_name", "Unknown")
-        if isinstance(org_info, dict):
-            return org_info.get("org_name", "Unknown")
-        return "Unknown"
-
-    for grant in active_grants:
-        name = extract_name(grant.get("organization", {}))
-        if name != "Unknown":
-            institution_data[name]["active_grants"].append(grant)
-            try:
-                institution_data[name]["total_active_funding"] += float(grant.get("award_amount", 0))
-            except (ValueError, TypeError):
-                pass
-
-    for grant in terminated_grants:
-        name = extract_name(grant.get("organization", {}))
-        if name in institution_data:
-            institution_data[name]["terminated_grants"].append(grant)
-            try:
-                institution_data[name]["total_terminated_funding"] += float(grant.get("award_amount", 0))
-            except (ValueError, TypeError):
-                pass
-
-    return institution_data
-
-
-def calculate_institution_risk(institution, data, cost_per_researcher):
-    """
-    Calculate layoff risk metrics for one institution.
-    Returns a dict of summarized risk values or None if skipped.
-    """
-    if data["total_active_funding"] < 100000:
-        return None
-
-    lab = estimate_lab_size(data["total_active_funding"], cost_per_researcher)
-    cliff = calculate_funding_cliff(data["active_grants"], months_ahead=12)
-
-    cliff_weight = cliff["cliff_percentage"] * 0.4
-    term_weight = (data["total_terminated_funding"] / data["total_active_funding"] * 100) * 0.3 if data["total_active_funding"] > 0 else 0
-    size_weight = min(lab["estimated_researchers"] * 2, 20)
-    penalty = max(0, (3 - len(data["active_grants"])) * 5)
-
-    score = cliff_weight + term_weight + size_weight + penalty
-    at_risk = cliff["expiring_funding"] / cost_per_researcher
-    lost = data["total_terminated_funding"] / cost_per_researcher
-
-    level = (
-        "CRITICAL" if score > 70 else
-        "HIGH" if score > 50 else
-        "MEDIUM" if score > 30 else
-        "LOW"
-    )
-
-    return {
-        "institution": institution,
-        "risk_score": round(score, 1),
-        "estimated_lab_size": lab["estimated_researchers"],
-        "at_risk_positions": round(at_risk, 1),
-        "recently_lost_positions": round(lost, 1),
-        "funding_cliff_percentage": cliff["cliff_percentage"],
-        "total_active_funding": data["total_active_funding"],
-        "active_grants_count": len(data["active_grants"]),
-        "terminated_grants_count": len(data["terminated_grants"]),
-        "risk_level": level
-    }
+        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 Starting Enhanced NSF-Tracker API with Optimized Caching...")
+    print("✨ Features:")
+    print("  🎯 O(1) Dictionary-based caching")
+    print("  ⚡ Instant cached result retrieval") 
+    print("  🔄 Fresh analysis when needed")
+    print("  📊 Enhanced delayed funding analysis")
+    print("  🏢 Department-level breakdown")
+    print()
     uvicorn.run(app, host="localhost", port=8000)
-
-
