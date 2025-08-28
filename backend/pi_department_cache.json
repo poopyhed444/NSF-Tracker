@@ -100,5 +100,53 @@
     "source": "heuristic",
     "confidence": "low",
     "timestamp": "2025-08-26T23:47:56.844976"
+  },
+  "alonzo francis|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.318866"
+  },
+  "applebaum mark|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.346370"
+  },
+  "arias erika|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.365424"
+  },
+  "arora rishi|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.382608"
+  },
+  "avanaki kamran|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.400384"
+  },
+  "awatramani rajeshwar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.417959"
+  },
+  "arshiya baig|university of chicago": {
+    "department": "Medicine",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-08-27T23:30:27.436313"
+  },
+  "bainbridge wilma|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-27T23:30:27.438827"
   }
 }

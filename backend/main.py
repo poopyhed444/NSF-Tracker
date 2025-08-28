@@ -743,9 +743,15 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                 amount = float(grant.get('award_amount', 0) or 0)
                 total_funding += amount
                 
-                # Check grant status
+                # Check grant status - NIH uses is_active field, others use award_status
                 status = grant.get('award_status', '').lower()
-                if status in ['terminated', 'cancelled', 'expired']:
+                is_active = grant.get('is_active')
+                
+                # Consider grant terminated if:
+                # 1. Explicitly marked in award_status, OR
+                # 2. NIH grant with is_active=False
+                if (status in ['terminated', 'cancelled', 'expired'] or 
+                    is_active is False):
                     terminated_grants.append(grant)
                 else:
                     active_grants.append(grant)
@@ -1026,11 +1032,22 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
             # Get the raw PI data from nonrenewal analysis
             nonrenewal_grants_by_pi = nonrenewal_analysis.get('nonrenewal_grants_by_pi', {})
             
+            # DEBUG: Show what's in cancelled_grants_by_pi
+            print(f"🔍 DEBUG: cancelled_grants_by_pi has {len(cancelled_grants_by_pi)} PIs:")
+            for pi_name in cancelled_grants_by_pi.keys():
+                print(f"  - {pi_name}: ${cancelled_grants_by_pi[pi_name]['lost_funding']:,.0f}")
+                
+            print(f"🔍 DEBUG: nonrenewal_grants_by_pi has {len(nonrenewal_grants_by_pi)} PIs:")
+            for pi_name in nonrenewal_grants_by_pi.keys():
+                print(f"  - {pi_name}: ${nonrenewal_grants_by_pi[pi_name]['lost_funding']:,.0f}")
+            
             # Cache both cancelled and nonrenewal PI data
             cache_pi_details(institution_name, cancelled_grants_by_pi, nonrenewal_grants_by_pi)
             print(f"✅ Cached details for {len(cancelled_grants_by_pi)} cancelled PIs and {len(nonrenewal_grants_by_pi)} nonrenewal PIs")
         except Exception as e:
             print(f"⚠️ Error caching PI details: {e}")
+            import traceback
+            traceback.print_exc()
         
         return result
         
@@ -2061,6 +2078,65 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 }
             else:
                 print(f"ℹ️ Main analysis exists but {pi_name} not found - PI may have no cancelled/non-renewal grants")
+                
+                # Check if PI appears in the institution analysis results but isn't cached
+                try:
+                    # Try to get the institution analysis to see if PI appears there
+                    if main_analysis_cache:
+                        cancelled_impact = main_analysis_cache.get('cancelled_grants_impact', {})
+                        top_cancelled_pis = cancelled_impact.get('top_affected_pis', [])
+                        
+                        # Check if this PI appears in cancelled grants
+                        for pi_data in top_cancelled_pis:
+                            if pi_data.get('pi_name', '').upper().strip() == pi_name.upper().strip():
+                                print(f"🔍 Found {pi_name} in cancelled grants analysis but not in cache!")
+                                
+                                # Return the data from the analysis
+                                return {
+                                    "pi_name": pi_name,
+                                    "institution": institution_name,
+                                    "total_lost_funding": pi_data.get('lost_funding', 0),
+                                    "cancelled_grants": [],  # Detailed grants not available from summary
+                                    "nonrenewal_grants": [],
+                                    "department": pi_data.get('department', 'Unknown'),
+                                    "summary": {
+                                        "total_grants_affected": pi_data.get('grants_count', 0),
+                                        "cancelled_count": pi_data.get('grants_count', 0),
+                                        "nonrenewal_count": 0,
+                                        "total_funding_lost": pi_data.get('lost_funding', 0)
+                                    },
+                                    "source": "institution_analysis_fallback",
+                                    "note": "Data retrieved from institution analysis - detailed grant info requires cache rebuild"
+                                }
+                        
+                        # Check if this PI appears in non-renewal grants
+                        nonrenewal_impact = main_analysis_cache.get('nonrenewal_grants_impact', {})
+                        top_nonrenewal_pis = nonrenewal_impact.get('top_affected_pis', [])
+                        
+                        for pi_data in top_nonrenewal_pis:
+                            if pi_data.get('pi_name', '').upper().strip() == pi_name.upper().strip():
+                                print(f"🔍 Found {pi_name} in non-renewal grants analysis but not in cache!")
+                                
+                                return {
+                                    "pi_name": pi_name,
+                                    "institution": institution_name,
+                                    "total_lost_funding": pi_data.get('lost_funding', 0),
+                                    "cancelled_grants": [],
+                                    "nonrenewal_grants": [],  # Detailed grants not available from summary
+                                    "department": pi_data.get('department', 'Unknown'),
+                                    "summary": {
+                                        "total_grants_affected": pi_data.get('grants_count', 0),
+                                        "cancelled_count": 0,
+                                        "nonrenewal_count": pi_data.get('grants_count', 0),
+                                        "total_funding_lost": pi_data.get('lost_funding', 0)
+                                    },
+                                    "source": "institution_analysis_fallback",
+                                    "note": "Data retrieved from institution analysis - detailed grant info requires cache rebuild"
+                                }
+                
+                except Exception as e:
+                    print(f"⚠️ Error checking institution analysis for PI: {e}")
+                
                 return {
                     "pi_name": pi_name,
                     "institution": institution_name,
@@ -2357,4 +2433,4 @@ if __name__ == "__main__":
     print("  📊 Enhanced delayed funding analysis")
     print("  🏢 Department-level breakdown")
     print()
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="localhost", port=8001)
