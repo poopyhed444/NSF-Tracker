@@ -743,9 +743,15 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                 amount = float(grant.get('award_amount', 0) or 0)
                 total_funding += amount
                 
-                # Check grant status
+                # Check grant status - NIH uses is_active field, others use award_status
                 status = grant.get('award_status', '').lower()
-                if status in ['terminated', 'cancelled', 'expired']:
+                is_active = grant.get('is_active')
+                
+                # Consider grant terminated if:
+                # 1. Explicitly marked in award_status, OR
+                # 2. NIH grant with is_active=False
+                if (status in ['terminated', 'cancelled', 'expired'] or 
+                    is_active is False):
                     terminated_grants.append(grant)
                 else:
                     active_grants.append(grant)
@@ -1507,8 +1513,13 @@ async def get_university_details(institution_name: str):
                         # Check if grant is active or terminated based on status/end date
                         status = grant.get('project_end_date', '')
                         award_status = grant.get('award_status', '').lower()
+                        is_active = grant.get('is_active')
                         
-                        if award_status in ['terminated', 'cancelled', 'expired']:
+                        # Consider grant terminated if:
+                        # 1. Explicitly marked in award_status, OR
+                        # 2. NIH grant with is_active=False
+                        if (award_status in ['terminated', 'cancelled', 'expired'] or 
+                            is_active is False):
                             institution_terminated_grants.append(grant)
                         else:
                             institution_active_grants.append(grant)
@@ -1529,13 +1540,18 @@ async def get_university_details(institution_name: str):
                     try:
                         status = grant.get('project_end_date', '')
                         award_status = grant.get('award_status', '').lower()
+                        is_active = grant.get('is_active')
                         
                         # Check if we already have this grant
                         project_num = grant.get('project_num') or grant.get('award_id') or grant.get('id')
                         existing_nums = [g.get('project_num') or g.get('award_id') or g.get('id') for g in institution_active_grants + institution_terminated_grants]
                         
                         if project_num not in existing_nums:
-                            if award_status in ['terminated', 'cancelled', 'expired']:
+                            # Consider grant terminated if:
+                            # 1. Explicitly marked in award_status, OR
+                            # 2. NIH grant with is_active=False
+                            if (award_status in ['terminated', 'cancelled', 'expired'] or 
+                                is_active is False):
                                 institution_terminated_grants.append(grant)
                             else:
                                 institution_active_grants.append(grant)
@@ -2215,7 +2231,13 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 
                 # Check if this is a cancelled/terminated grant
                 status = grant_data.get('award_status', '').lower()
-                is_cancelled = any(term in status for term in ['cancelled', 'terminated', 'suspend'])
+                is_active = grant_data.get('is_active')
+                
+                # Consider grant terminated if:
+                # 1. Explicitly marked in award_status, OR
+                # 2. NIH grant with is_active=False
+                is_cancelled = (any(term in status for term in ['cancelled', 'terminated', 'suspend']) or 
+                               is_active is False)
                 
                 # Check if this is a non-renewal case (grant ended without renewal)
                 is_nonrenewal = False
