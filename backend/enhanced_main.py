@@ -2077,6 +2077,65 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
                 }
             else:
                 print(f"ℹ️ Main analysis exists but {pi_name} not found - PI may have no cancelled/non-renewal grants")
+                
+                # Check if PI appears in the institution analysis results but isn't cached
+                try:
+                    # Try to get the institution analysis to see if PI appears there
+                    if main_analysis_cache:
+                        cancelled_impact = main_analysis_cache.get('cancelled_grants_impact', {})
+                        top_cancelled_pis = cancelled_impact.get('top_affected_pis', [])
+                        
+                        # Check if this PI appears in cancelled grants
+                        for pi_data in top_cancelled_pis:
+                            if pi_data.get('pi_name', '').upper().strip() == pi_name.upper().strip():
+                                print(f"🔍 Found {pi_name} in cancelled grants analysis but not in cache!")
+                                
+                                # Return the data from the analysis
+                                return {
+                                    "pi_name": pi_name,
+                                    "institution": institution_name,
+                                    "total_lost_funding": pi_data.get('lost_funding', 0),
+                                    "cancelled_grants": [],  # Detailed grants not available from summary
+                                    "nonrenewal_grants": [],
+                                    "department": pi_data.get('department', 'Unknown'),
+                                    "summary": {
+                                        "total_grants_affected": pi_data.get('grants_count', 0),
+                                        "cancelled_count": pi_data.get('grants_count', 0),
+                                        "nonrenewal_count": 0,
+                                        "total_funding_lost": pi_data.get('lost_funding', 0)
+                                    },
+                                    "source": "institution_analysis_fallback",
+                                    "note": "Data retrieved from institution analysis - detailed grant info requires cache rebuild"
+                                }
+                        
+                        # Check if this PI appears in non-renewal grants
+                        nonrenewal_impact = main_analysis_cache.get('nonrenewal_grants_impact', {})
+                        top_nonrenewal_pis = nonrenewal_impact.get('top_affected_pis', [])
+                        
+                        for pi_data in top_nonrenewal_pis:
+                            if pi_data.get('pi_name', '').upper().strip() == pi_name.upper().strip():
+                                print(f"🔍 Found {pi_name} in non-renewal grants analysis but not in cache!")
+                                
+                                return {
+                                    "pi_name": pi_name,
+                                    "institution": institution_name,
+                                    "total_lost_funding": pi_data.get('lost_funding', 0),
+                                    "cancelled_grants": [],
+                                    "nonrenewal_grants": [],  # Detailed grants not available from summary
+                                    "department": pi_data.get('department', 'Unknown'),
+                                    "summary": {
+                                        "total_grants_affected": pi_data.get('grants_count', 0),
+                                        "cancelled_count": 0,
+                                        "nonrenewal_count": pi_data.get('grants_count', 0),
+                                        "total_funding_lost": pi_data.get('lost_funding', 0)
+                                    },
+                                    "source": "institution_analysis_fallback",
+                                    "note": "Data retrieved from institution analysis - detailed grant info requires cache rebuild"
+                                }
+                
+                except Exception as e:
+                    print(f"⚠️ Error checking institution analysis for PI: {e}")
+                
                 return {
                     "pi_name": pi_name,
                     "institution": institution_name,
