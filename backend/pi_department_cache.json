@@ -148,5 +148,11 @@
     "source": "heuristic",
     "confidence": "low",
     "timestamp": "2025-08-27T23:30:27.438827"
+  },
+  "aschebrook-kilfoy briseis|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-08-30T21:32:39.456828"
   }
 }
