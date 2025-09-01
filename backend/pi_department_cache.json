@@ -154,5 +154,11 @@
     "source": "heuristic",
     "confidence": "low",
     "timestamp": "2025-08-30T21:32:39.456828"
+  },
+  "abdel mohsen mohamed|university of chicago": {
+    "department": "Medicine",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-08-31T23:54:34.408957"
   }
 }

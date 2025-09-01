@@ -1210,6 +1210,27 @@ async def get_comprehensive_delayed_funding_analysis(
                 
                 # Perform analysis using fresh data
                 result = await analyze_fresh_nih_nsf_data(institution_name, institution_grants, pi_cache)
+                
+                # 🔧 CRITICAL FIX: Preserve PI details data in cache structure after analysis
+                print(f"💾 Post-analysis data preservation for {institution_name} (delayed-funding endpoint)...")
+                try:
+                    # Extract raw PI data from the analysis result
+                    cancelled_impact = result.get('cancelled_grants_impact', {})
+                    nonrenewal_impact = result.get('nonrenewal_grants_impact', {})
+                    
+                    cancelled_raw_data = cancelled_impact.get('cancelled_grants_by_pi', {})
+                    nonrenewal_raw_data = nonrenewal_impact.get('nonrenewal_grants_by_pi', {})
+                    
+                    # Cache the detailed PI data for individual PI queries
+                    if cancelled_raw_data or nonrenewal_raw_data:
+                        cache_pi_details(institution_name, cancelled_raw_data, nonrenewal_raw_data)
+                        print(f"✅ Preserved details for {len(cancelled_raw_data)} cancelled PIs and {len(nonrenewal_raw_data)} nonrenewal PIs")
+                    else:
+                        print(f"⚠️ No detailed PI data found to preserve")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error preserving PI details cache: {e}")
+                
             else:
                 print(f"⚠️ No grants found in fresh data, falling back to comprehensive tracker")
                 # Fallback to comprehensive tracker
@@ -1219,6 +1240,24 @@ async def get_comprehensive_delayed_funding_analysis(
                     pi_cache=pi_cache,
                     force_refresh=force_refresh
                 )
+                
+                # 🔧 CRITICAL FIX: Also preserve data from fallback analysis (delayed-funding endpoint)
+                print(f"💾 Post-fallback data preservation for {institution_name} (delayed-funding endpoint)...")
+                try:
+                    # Extract raw PI data from the fallback result  
+                    cancelled_impact = result.get('cancelled_grants_impact', {})
+                    nonrenewal_impact = result.get('nonrenewal_grants_impact', {})
+                    
+                    cancelled_raw_data = cancelled_impact.get('cancelled_grants_by_pi', {})
+                    nonrenewal_raw_data = nonrenewal_impact.get('nonrenewal_grants_by_pi', {})
+                    
+                    # Cache the detailed PI data for individual PI queries
+                    if cancelled_raw_data or nonrenewal_raw_data:
+                        cache_pi_details(institution_name, cancelled_raw_data, nonrenewal_raw_data)
+                        print(f"✅ Preserved fallback details for {len(cancelled_raw_data)} cancelled PIs and {len(nonrenewal_raw_data)} nonrenewal PIs")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error preserving fallback PI details cache: {e}")
         else:
             print("⚠️ Fresh cache not available, using comprehensive tracker")
             # Fallback to comprehensive tracker
@@ -1671,6 +1710,27 @@ async def get_university_details(institution_name: str):
             
             # Use enhanced analysis function with comprehensive grant data
             result = await analyze_fresh_nih_nsf_data(institution_name, all_grants_for_institution, pi_cache=None)
+            
+            # 🔧 CRITICAL FIX: Preserve PI details data in cache structure after analysis
+            print(f"💾 Post-analysis data preservation for {institution_name}...")
+            try:
+                # Extract raw PI data from the analysis result
+                cancelled_impact = result.get('cancelled_grants_impact', {})
+                nonrenewal_impact = result.get('nonrenewal_grants_impact', {})
+                
+                cancelled_raw_data = cancelled_impact.get('cancelled_grants_by_pi', {})
+                nonrenewal_raw_data = nonrenewal_impact.get('nonrenewal_grants_by_pi', {})
+                
+                # Cache the detailed PI data for individual PI queries
+                if cancelled_raw_data or nonrenewal_raw_data:
+                    cache_pi_details(institution_name, cancelled_raw_data, nonrenewal_raw_data)
+                    print(f"✅ Preserved details for {len(cancelled_raw_data)} cancelled PIs and {len(nonrenewal_raw_data)} nonrenewal PIs")
+                else:
+                    print(f"⚠️ No detailed PI data found to preserve")
+                    
+            except Exception as e:
+                print(f"⚠️ Error preserving PI details cache: {e}")
+            
             return result
         else:
             print("⚠️ No grants found with comprehensive search, falling back to enhanced tracker")
@@ -1678,10 +1738,30 @@ async def get_university_details(institution_name: str):
             # Final fallback to comprehensive analysis
             from enhanced_delayed_funding_tracker import EnhancedDelayedFundingTracker
             enhanced_tracker = EnhancedDelayedFundingTracker()
-            return await enhanced_tracker.comprehensive_delayed_funding_analysis(
+            fallback_result = await enhanced_tracker.comprehensive_delayed_funding_analysis(
                 institution_name, 
                 force_fresh_analysis=True  # Force fresh analysis for better coverage
             )
+            
+            # 🔧 CRITICAL FIX: Also preserve data from fallback analysis
+            print(f"💾 Post-fallback data preservation for {institution_name}...")
+            try:
+                # Extract raw PI data from the fallback result  
+                cancelled_impact = fallback_result.get('cancelled_grants_impact', {})
+                nonrenewal_impact = fallback_result.get('nonrenewal_grants_impact', {})
+                
+                cancelled_raw_data = cancelled_impact.get('cancelled_grants_by_pi', {})
+                nonrenewal_raw_data = nonrenewal_impact.get('nonrenewal_grants_by_pi', {})
+                
+                # Cache the detailed PI data for individual PI queries
+                if cancelled_raw_data or nonrenewal_raw_data:
+                    cache_pi_details(institution_name, cancelled_raw_data, nonrenewal_raw_data)
+                    print(f"✅ Preserved fallback details for {len(cancelled_raw_data)} cancelled PIs and {len(nonrenewal_raw_data)} nonrenewal PIs")
+                    
+            except Exception as e:
+                print(f"⚠️ Error preserving fallback PI details cache: {e}")
+            
+            return fallback_result
         
     except Exception as e:
         print(f"Error getting university details: {e}")
