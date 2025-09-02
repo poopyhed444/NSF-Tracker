@@ -468,16 +468,12 @@ class EnhancedDelayedFundingTracker:
             'recommended_actions': self._generate_action_recommendations(combined_risk, renewal_analysis, disbursement_analysis)
         }
         
-        # Cache the result
+        # Cache the result using proper analysis cache (not grants cache!)
         try:
-            cached_data = get_combined_cache() or []
-            cached_data.append({
-                'cache_key': cache_key,
-                'cached_at': datetime.now().isoformat(),
-                'data': result
-            })
-            save_combined_cache(cached_data)
-            print(f"Cached enhanced comprehensive analysis for {institution_name}")
+            # Don't pollute the grants cache with analysis results!
+            # The combined_grants.json should only contain raw grant data from APIs
+            # Analysis results should go in a separate cache system
+            print(f"✅ Enhanced comprehensive analysis complete for {institution_name} (not cached to avoid grants cache pollution)")
         except Exception as e:
             print(f"Enhanced caching error: {e}")
         

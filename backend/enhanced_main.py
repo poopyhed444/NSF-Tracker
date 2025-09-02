@@ -1161,6 +1161,7 @@ async def get_comprehensive_delayed_funding_analysis(
         print(f"🔍 Enhanced analysis for: {institution_name} (method: {method}, departments: {include_departments})")
         
         # Check optimized cache first (skip if force_refresh)
+        print(f"🔍 DEBUG: force_refresh={force_refresh}")
         if not force_refresh:
             print(f"🚀 Checking optimized cache for {institution_name}...")
             cached_result = get_cached_analysis(institution_name, method, include_departments)
@@ -1168,6 +1169,8 @@ async def get_comprehensive_delayed_funding_analysis(
             if cached_result:
                 print(f"✅ Using cached analysis for {institution_name} (optimized cache)")
                 return cached_result
+        else:
+            print(f"⚡ FORCE REFRESH: Skipping cache check for {institution_name}")
 
         # Perform fresh analysis
         print(f"🔍 Starting fresh analysis for {institution_name}")
@@ -1181,9 +1184,36 @@ async def get_comprehensive_delayed_funding_analysis(
         # Create tracker and perform analysis using fresh NIH/NSF data
         print("🎯 Using fresh NIH/NSF grant data for enhanced analysis...")
         
-        # Use fresh NIH/NSF cache data for enhanced analysis
-        from grant_cache import get_combined_cache
+        # Try to use fresh NIH/NSF cache data, or fetch if not available
+        from grant_cache import get_combined_cache, save_combined_cache
         fresh_grants = get_combined_cache()
+        
+        if fresh_grants and len(fresh_grants) > 0:
+            print(f"📊 Using fresh grant cache with {len(fresh_grants)} grants")
+        else:
+            print("📊 No fresh cache found, fetching grants for enhanced analysis...")
+            # Fetch grants directly for enhanced analysis
+            try:
+                from layoff_estimator import fetch_institution_grants
+                fresh_grants = await fetch_institution_grants(
+                    organization=institution_name,
+                    active_only=False,  # Get all grants including terminated ones
+                    max_records_per_source=5000
+                )
+                print(f"✅ Fetched {len(fresh_grants)} grants for enhanced analysis")
+                
+                # Save to cache for future use
+                if fresh_grants:
+                    save_combined_cache(fresh_grants, {
+                        "institution": institution_name,
+                        "fetched_for": "enhanced_analysis",
+                        "total_count": len(fresh_grants)
+                    })
+                    print(f"💾 Saved {len(fresh_grants)} grants to combined cache")
+                    
+            except Exception as e:
+                print(f"⚠️ Error fetching grants for enhanced analysis: {e}")
+                fresh_grants = []
         
         if fresh_grants and len(fresh_grants) > 0:
             print(f"📊 Using fresh grant cache with {len(fresh_grants)} grants")
@@ -2103,6 +2133,10 @@ async def get_pi_grant_details(institution_name: str, pi_name: str):
         cached_details = get_cached_pi_details(institution_name, pi_name)
         if cached_details:
             print(f"✅ Returning cached details for {pi_name}")
+            print(f"🔍 DEBUG cached_details keys: {list(cached_details.keys())}")
+            print(f"🔍 DEBUG cancelled_grants count: {len(cached_details.get('cancelled_grants', []))}")
+            print(f"🔍 DEBUG nonrenewal_grants count: {len(cached_details.get('nonrenewal_grants', []))}")
+            print(f"🔍 DEBUG total_lost_funding: {cached_details.get('total_lost_funding', 0)}")
             return {
                 "pi_name": pi_name,
                 "institution": institution_name,

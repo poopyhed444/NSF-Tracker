@@ -160,5 +160,3131 @@
     "source": "heuristic",
     "confidence": "medium",
     "timestamp": "2025-08-31T23:54:34.408957"
+  },
+  "ahsan habibul|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:26.404400"
+  },
+  "dignam james|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.319393"
+  },
+  "julian solway|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.378414"
+  },
+  "david meltzer|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.402545"
+  },
+  "george langan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.413657"
+  },
+  "rick stevens|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.444817"
+  },
+  "grossman robert|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.460117"
+  },
+  "elbert huang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.479171"
+  },
+  "ivan moskowitz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.553411"
+  },
+  "kunle odunsi|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.600724"
+  },
+  "greg yothers|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.718700"
+  },
+  "giger maryellen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.731621"
+  },
+  "bruxanne el-kammash|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.831373"
+  },
+  "emily rogalski|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:44.874577"
+  },
+  "john maunsell|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.037521"
+  },
+  "clark marcus|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.063891"
+  },
+  "john schneider|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.155328"
+  },
+  "dominique missiakas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.230458"
+  },
+  "nanduri prabhakar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.251710"
+  },
+  "chuan he|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.292086"
+  },
+  "louis philipson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.346087"
+  },
+  "bana jabri|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.449514"
+  },
+  "mai pho|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.464226"
+  },
+  "krishnan yamuna|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.573730"
+  },
+  "harold pollack|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.605036"
+  },
+  "hatsopoulos nicholas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.651940"
+  },
+  "anne-marie oswald|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.685084"
+  },
+  "chang eugene|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.710956"
+  },
+  "alegre maria-luisa|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.758717"
+  },
+  "aaron esser-kahn|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.816818"
+  },
+  "mark sheffield|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.910342"
+  },
+  "carole ober|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.961617"
+  },
+  "tanya zakrison|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:45.990290"
+  },
+  "kasthuri narayanan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.075206"
+  },
+  "mcnulty moira|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.103687"
+  },
+  "cobey sarah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.127583"
+  },
+  "bell graeme|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.155880"
+  },
+  "mirmira raghavendra|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.205717"
+  },
+  "khader shabaana|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.730763"
+  },
+  "david pincus|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.900294"
+  },
+  "sihong wang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:46.970109"
+  },
+  "arlene chapman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.101795"
+  },
+  "gibbons robert|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.133036"
+  },
+  "olopade olufunmilayo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.198050"
+  },
+  "he yu-ying|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.296288"
+  },
+  "chen lin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.542047"
+  },
+  "brewer russell|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.572921"
+  },
+  "bensmaia sliman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.631079"
+  },
+  "christopher gomez|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.827544"
+  },
+  "karen kim|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:47.959439"
+  },
+  "beyer eric|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.015667"
+  },
+  "ernst lengyel|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:32:48.058156"
+  },
+  "sandra weintraub|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.077718"
+  },
+  "gajewski thomas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.092111"
+  },
+  "kupfer sonia|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.116186"
+  },
+  "gokhan mutlu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.133413"
+  },
+  "prabhakaran shyam|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.194825"
+  },
+  "rong zhai|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.287297"
+  },
+  "o'donnell peter|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.379113"
+  },
+  "joseph thornton|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.412769"
+  },
+  "edwin munro|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.427212"
+  },
+  "marcelo nobrega|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.461509"
+  },
+  "choi yoonsun|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.509914"
+  },
+  "amy weinmann|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.527299"
+  },
+  "shoham shy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.545987"
+  },
+  "oakes scott|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.591525"
+  },
+  "lindau stacy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.639475"
+  },
+  "anita chong|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.659309"
+  },
+  "clive wasserfall|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.679168"
+  },
+  "jade pagkas-bather|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.885259"
+  },
+  "gilad yoav|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.920165"
+  },
+  "joseph piccirilli|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.964276"
+  },
+  "fang yun|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:48.980632"
+  },
+  "sharp willard|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.024863"
+  },
+  "peter savage|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.039365"
+  },
+  "ari mim|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.064253"
+  },
+  "golovkina tatyana|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.122372"
+  },
+  "matthew tirrell|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.138495"
+  },
+  "elizabeth lynch|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.184361"
+  },
+  "benoit roux|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.230768"
+  },
+  "joel voss|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.321957"
+  },
+  "barreiro luis|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.364803"
+  },
+  "he xin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.457003"
+  },
+  "anna hotton|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.476084"
+  },
+  "pan tao|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.492538"
+  },
+  "esra tasali|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.533868"
+  },
+  "press valerie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.573294"
+  },
+  "jessica ridgway|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.756561"
+  },
+  "hara manami|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.866762"
+  },
+  "awad issam|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:49.904081"
+  },
+  "david kim|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.081605"
+  },
+  "anna di rienzo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.296737"
+  },
+  "anna volerman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.376707"
+  },
+  "tao xie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.414701"
+  },
+  "arora vineet|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.561979"
+  },
+  "ismayilova leyla|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.811370"
+  },
+  "himelhoch seth|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.827285"
+  },
+  "nyenhuis sharmilee|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.845056"
+  },
+  "bin zhou|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.859525"
+  },
+  "margaret spencer|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:50.925980"
+  },
+  "keenan robert|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.095178"
+  },
+  "jason maclean|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.121125"
+  },
+  "refetoff samuel|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.356929"
+  },
+  "godley lucy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.388328"
+  },
+  "huisingh-scheetz megan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.406754"
+  },
+  "deborah nelson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.441869"
+  },
+  "bader kenneth|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.543984"
+  },
+  "kay macleod|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.674029"
+  },
+  "jay koyner|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.715252"
+  },
+  "awh edward|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:51.737228"
+  },
+  "bissonnette bruce|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.071497"
+  },
+  "savas tay|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.102865"
+  },
+  "brian chiu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.160715"
+  },
+  "downey john|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.240566"
+  },
+  "nancy schwartz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.344799"
+  },
+  "david freedman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.370404"
+  },
+  "sajid shahul|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.441795"
+  },
+  "kanold patrick|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.485476"
+  },
+  "claud erika|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.671651"
+  },
+  "yingming zhao|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.797038"
+  },
+  "pan xiaochuan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.922660"
+  },
+  "alfredo garcia|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:52.999732"
+  },
+  "benjamin glick|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.072926"
+  },
+  "moellering raymond|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.115276"
+  },
+  "alexander chervonsky|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.195340"
+  },
+  "henderson tara|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.247379"
+  },
+  "callum ross|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.269238"
+  },
+  "bozhi tian|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.286389"
+  },
+  "chin marshall|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.306053"
+  },
+  "john reinitz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.330215"
+  },
+  "ludwig michael|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.347091"
+  },
+  "jonathan staley|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.435487"
+  },
+  "brandon pierce|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.543240"
+  },
+  "donald hedeker|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.645685"
+  },
+  "wei wei|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.845621"
+  },
+  "xiaochang zhang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:53.878018"
+  },
+  "andrea king|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.097835"
+  },
+  "david kovar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.169406"
+  },
+  "eatock ruth|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.252356"
+  },
+  "chevrier nicolas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.269052"
+  },
+  "chen chin-tu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.285857"
+  },
+  "heckman james|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.305950"
+  },
+  "alida bouris|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.371127"
+  },
+  "dietmar plenz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.589718"
+  },
+  "dolan mary|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.606299"
+  },
+  "bezanilla francisco|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.631603"
+  },
+  "huang jun|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.646200"
+  },
+  "christopher olopade|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.672603"
+  },
+  "carroll timothy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.691843"
+  },
+  "joseph kanabrocki|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:54.921701"
+  },
+  "ahmed osman|university of chicago": {
+    "department": "Medicine",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:32:55.051182"
+  },
+  "martha mcclintock|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.244323"
+  },
+  "kourosh rezania|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.278074"
+  },
+  "kathryn keenan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.357436"
+  },
+  "ralph weichselbaum|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.375312"
+  },
+  "horne-badovinac sally|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.389873"
+  },
+  "s. sherman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.535524"
+  },
+  "fei jingyi|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.651613"
+  },
+  "canham lorraine|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:55.989398"
+  },
+  "doriane miller|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.041829"
+  },
+  "antonio bianco|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.153575"
+  },
+  "li yan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.249536"
+  },
+  "luka pocivavsek|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.331734"
+  },
+  "mercedes pascual|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.354306"
+  },
+  "chen joyce|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.442879"
+  },
+  "sarah tersey|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.470121"
+  },
+  "akram bakkour|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.556350"
+  },
+  "erickson molly|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.680925"
+  },
+  "cambrian liu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.719277"
+  },
+  "becker lev|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:56.992147"
+  },
+  "brady matthew|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:57.033424"
+  },
+  "cathryn nagler|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:57.078207"
+  },
+  "barbara kee|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:57.166331"
+  },
+  "gregory voth|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:57.502047"
+  },
+  "gardel margaret|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:57.551072"
+  },
+  "parker william|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.245260"
+  },
+  "russell szmulewitz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.267291"
+  },
+  "akash patnaik|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.422292"
+  },
+  "sosnick tobin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.441500"
+  },
+  "daria esterhazy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.509238"
+  },
+  "albert bendelac|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.524359"
+  },
+  "hedy kindler|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.540125"
+  },
+  "dmitry rinberg|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.650859"
+  },
+  "samuel volchenboum|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.707717"
+  },
+  "dulin nickolai|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.741849"
+  },
+  "matthew stephens|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:58.771099"
+  },
+  "peng ying-jie|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:32:58.914152"
+  },
+  "aytekin oto|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:59.127749"
+  },
+  "mallory ward|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:59.299137"
+  },
+  "eduardo perozo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:59.558532"
+  },
+  "dezheng huo|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:32:59.603087"
+  },
+  "chen jueqi|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:59.877019"
+  },
+  "bishop douglas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:32:59.899552"
+  },
+  "david drummond|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.112763"
+  },
+  "elf shannon|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.226229"
+  },
+  "lin wenbin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.279182"
+  },
+  "jan ramirez|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.338743"
+  },
+  "christopher weber|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.406823"
+  },
+  "fehon richard|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.460238"
+  },
+  "aly khan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.535764"
+  },
+  "zhang zhuzhu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.559022"
+  },
+  "de wit harriet|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.705446"
+  },
+  "engin ozkan|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:00.730350"
+  },
+  "jayasri nanduri|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.808408"
+  },
+  "polonsky tamar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.839446"
+  },
+  "alverdy john|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.896367"
+  },
+  "arac-ozkan demet|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:00.926265"
+  },
+  "kron stephen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.023435"
+  },
+  "anne sperling|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.129793"
+  },
+  "ilaria rebay|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.220843"
+  },
+  "al-hendy ayman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.469203"
+  },
+  "mcnerney megan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.503356"
+  },
+  "christian hansel|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.606870"
+  },
+  "beiser david|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.669049"
+  },
+  "konetzka rita|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.840599"
+  },
+  "melody swartz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.875189"
+  },
+  "bryan dickinson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:01.919333"
+  },
+  "reid russell|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.013142"
+  },
+  "francesca luca|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.216828"
+  },
+  "brook cara|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.523398"
+  },
+  "cohen ronald|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.560077"
+  },
+  "elizabeth heckscher|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.624343"
+  },
+  "comstock laurie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.715236"
+  },
+  "lixing yang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.842463"
+  },
+  "evgeny izumchenko|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.917582"
+  },
+  "kay leslie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:02.938737"
+  },
+  "glotzer michael|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.059134"
+  },
+  "francois spitz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.242054"
+  },
+  "phoebe rice|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.278478"
+  },
+  "jeanne marsh|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.315264"
+  },
+  "mary mcpeek|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.399768"
+  },
+  "kronforst marcus|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.426694"
+  },
+  "ming xu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.536031"
+  },
+  "schmidt-ott urs|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.601012"
+  },
+  "michael rust|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:03.668547"
+  },
+  "abadie valerie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.122605"
+  },
+  "marsha rosner|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.197650"
+  },
+  "xiaoxi zhuang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.302288"
+  },
+  "aresha martinez-cardoso|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.412717"
+  },
+  "rongxue wu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.484787"
+  },
+  "kratsios paschalis|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.545170"
+  },
+  "alexander ruthenburg|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.635214"
+  },
+  "rawal viresh|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.661905"
+  },
+  "light samuel|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.743416"
+  },
+  "london sarah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.766516"
+  },
+  "joshua weinstein|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.787041"
+  },
+  "levin mark|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.809824"
+  },
+  "minglei zhao|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.837147"
+  },
+  "axel concepcion gonzalez|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.904860"
+  },
+  "mark mimee|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:04.971784"
+  },
+  "cohen marlene|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:05.026989"
+  },
+  "miao yuxuan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:05.099989"
+  },
+  "pott sebastian|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:05.143062"
+  },
+  "glenn randall|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:05.502354"
+  },
+  "kaplan mohammed|university of chicago": {
+    "department": "Medicine",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:05.655569"
+  },
+  "chen jing|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.150408"
+  },
+  "daniel mcgehee|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.170163"
+  },
+  "liu xuanyao|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.276636"
+  },
+  "hamanaka robert|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.314868"
+  },
+  "li yang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.495740"
+  },
+  "kaufman matthew|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.870391"
+  },
+  "tang wei-jen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:06.914642"
+  },
+  "arjun raman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.001122"
+  },
+  "john novembre|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.090466"
+  },
+  "andrew dahl|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.112022"
+  },
+  "mukherjee sampriti|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.130160"
+  },
+  "chen mengjie|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:07.483204"
+  },
+  "heather marlow|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.511514"
+  },
+  "jingxin wang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.628060"
+  },
+  "brorson james|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.715692"
+  },
+  "debra stulberg|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.851822"
+  },
+  "blekhman ran|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.928899"
+  },
+  "carrillo robert|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:07.944847"
+  },
+  "andrew koh|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.069043"
+  },
+  "alexander muir|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.353148"
+  },
+  "agrawal nishant|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.386640"
+  },
+  "huentelman matt|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.416218"
+  },
+  "berg jeremy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.617633"
+  },
+  "maanasa raghavan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.697706"
+  },
+  "losert wolfgang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.765968"
+  },
+  "anna wuttig|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.977792"
+  },
+  "arvind murugan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:08.995639"
+  },
+  "juan mendoza|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.053709"
+  },
+  "jens ludwig|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.165827"
+  },
+  "suriyanarayanan vaikuntanathan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.199407"
+  },
+  "king sarah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.267053"
+  },
+  "anthony kossiakoff|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.371910"
+  },
+  "goss kathleen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.510916"
+  },
+  "prachi sanghavi|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.530252"
+  },
+  "marcos sotomayor|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:09.840834"
+  },
+  "steven white|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.187513"
+  },
+  "anderson john|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.241348"
+  },
+  "justin kline|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.389765"
+  },
+  "tian zhen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.451484"
+  },
+  "elliot gershon|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.559930"
+  },
+  "gao guimin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.754240"
+  },
+  "adam duvall|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.774714"
+  },
+  "jiang yulei|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.795979"
+  },
+  "chien-min kao|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:10.880691"
+  },
+  "lingen mark|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:11.106858"
+  },
+  "aaron turkewitz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:11.690239"
+  },
+  "changiz geula|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:11.762189"
+  },
+  "dong guangbin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:12.071116"
+  },
+  "kuehn seppe|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:12.190005"
+  },
+  "heng-chi lee|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:12.358216"
+  },
+  "hans schreiber|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:12.550650"
+  },
+  "matthias steinruecken|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:12.614923"
+  },
+  "iris romero|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:12.967220"
+  },
+  "aaron dinner|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.021073"
+  },
+  "goodwill janelle|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.109419"
+  },
+  "milda saunders|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.228985"
+  },
+  "jie zhou|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.430418"
+  },
+  "rama ranganathan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.632453"
+  },
+  "hibino narutoshi|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.752863"
+  },
+  "scott snyder|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.915324"
+  },
+  "halpern howard|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.934821"
+  },
+  "angela roberts|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:13.993308"
+  },
+  "andrey rzhetsky|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:14.362210"
+  },
+  "minshall richard|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:14.495429"
+  },
+  "kenton kimberly|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:14.621389"
+  },
+  "eric pamer|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:14.730815"
+  },
+  "megan mekinda|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:14.930230"
+  },
+  "franses joseph|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.003365"
+  },
+  "haider hiba|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.129273"
+  },
+  "jagoda patrick|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.150563"
+  },
+  "fedock gina|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.174162"
+  },
+  "green william|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.239506"
+  },
+  "wu xiaoyang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.260656"
+  },
+  "griffith james|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.455325"
+  },
+  "beaulieu-jones brett|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.490299"
+  },
+  "brandon faubert|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.506484"
+  },
+  "andrea piunti|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.525402"
+  },
+  "brett emma|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.542576"
+  },
+  "dario f de jesus|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.561700"
+  },
+  "mitchell noah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.631463"
+  },
+  "cassandra hayne|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.652679"
+  },
+  "ada weinstock|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.679406"
+  },
+  "schwörer simon|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.700952"
+  },
+  "kaloyan tsanov|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.827146"
+  },
+  "laura mcguinn|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:15.992601"
+  },
+  "brent doiron|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.102592"
+  },
+  "hubbell jeffrey|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.197499"
+  },
+  "tang weixin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.226799"
+  },
+  "ghosh supriya|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.353584"
+  },
+  "dinizulu sonya|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.399001"
+  },
+  "ahmed mushtaq|university of chicago": {
+    "department": "Medicine",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:16.425415"
+  },
+  "jacobson kristen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.446021"
+  },
+  "nathan schoettler|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.476454"
+  },
+  "patrick wilson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.564489"
+  },
+  "hanson summer|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.581152"
+  },
+  "benjamin shogan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.597963"
+  },
+  "roshni roy chowdhury|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:16.874423"
+  },
+  "cagney kathleen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.157462"
+  },
+  "drew memmott|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.436323"
+  },
+  "stock wendy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.451545"
+  },
+  "armato samuel|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.496751"
+  },
+  "amittha wickrema|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.532247"
+  },
+  "prince victoria|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.655260"
+  },
+  "jing lu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:17.922195"
+  },
+  "frederick howard|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:18.407243"
+  },
+  "cone jackson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:18.515044"
+  },
+  "fotini gounari|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.065677"
+  },
+  "jonathan trujillo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.114897"
+  },
+  "lin shen|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.312508"
+  },
+  "harita shah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.347152"
+  },
+  "kimberly stanford|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.376837"
+  },
+  "megan prochaska|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.398268"
+  },
+  "cleveland noa|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.526687"
+  },
+  "amber johnson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.690387"
+  },
+  "linda waite|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.707599"
+  },
+  "ettleson matthew|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:19.802780"
+  },
+  "pablo sanchez|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.120814"
+  },
+  "loren saulsberry|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.140288"
+  },
+  "daniel rubin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.229682"
+  },
+  "madariaga maria|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.253439"
+  },
+  "jenny trinitapoli|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.330129"
+  },
+  "elizabeth tung|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.459698"
+  },
+  "bhakti patel|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.510513"
+  },
+  "erin green|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.626137"
+  },
+  "groman stephanie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:20.807389"
+  },
+  "emont margo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:21.651779"
+  },
+  "darnell motley|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:21.695097"
+  },
+  "joel pekow|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:21.955163"
+  },
+  "krishnan seetha|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.028557"
+  },
+  "martinez maylyn|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.067291"
+  },
+  "xinan yang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.228199"
+  },
+  "jayson smith|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.265977"
+  },
+  "tauras vilgalys|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.589864"
+  },
+  "ramanujan srinath|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.729243"
+  },
+  "xie zhicheng|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:22.790168"
+  },
+  "zhengjie zhou|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:22.795686"
+  },
+  "bandekar sumit|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.820789"
+  },
+  "debettencourt megan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.961396"
+  },
+  "caputo jennifer|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:22.981531"
+  },
+  "bobrovskyy maksym|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.045798"
+  },
+  "samantha yee|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.211285"
+  },
+  "hwang hyesung|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.253930"
+  },
+  "garcia-bayona leonor|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.301003"
+  },
+  "micah prochaska|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.348902"
+  },
+  "david wu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.758467"
+  },
+  "keedy sarah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:23.780027"
+  },
+  "alvin yu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.025887"
+  },
+  "hurst michelle|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.128136"
+  },
+  "matthew ross|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.146073"
+  },
+  "antoine madar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.219848"
+  },
+  "mark ratain|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.333574"
+  },
+  "cliff elizabeth|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.396213"
+  },
+  "madhavi senagolage|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.526628"
+  },
+  "obada shamaa|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.580866"
+  },
+  "helen lietuvninkas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.616501"
+  },
+  "matthew styles|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.637132"
+  },
+  "arsala deanna|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:24.674502"
+  },
+  "gonen memisoglu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.033896"
+  },
+  "maurizio paul|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.087955"
+  },
+  "curt waltmann|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.154795"
+  },
+  "douglas goodsmith|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.283033"
+  },
+  "monica peek|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.475159"
+  },
+  "jordan mancl|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.763442"
+  },
+  "colin swenson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.813113"
+  },
+  "o'connor timothy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.861134"
+  },
+  "beckett daniel|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:25.919959"
+  },
+  "laiteerapong neda|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.091197"
+  },
+  "glauninger hendrik|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.286359"
+  },
+  "jotte matthew|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.302600"
+  },
+  "andrew molina|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.319547"
+  },
+  "kyle lin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.339402"
+  },
+  "nathaniel wright|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.359421"
+  },
+  "arpit panda|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.377909"
+  },
+  "maheshwari nikita|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.402297"
+  },
+  "elizabeth woo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.420446"
+  },
+  "martinez tanner|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.523588"
+  },
+  "frith mary|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.541275"
+  },
+  "ou zhu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.582339"
+  },
+  "caraline sepich|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.602001"
+  },
+  "gregory karczmar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.659074"
+  },
+  "anthony hung|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.739984"
+  },
+  "dustin shaw|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.895034"
+  },
+  "christine miller|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.954134"
+  },
+  "allen zhu|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:26.989213"
+  },
+  "blake flood|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.064273"
+  },
+  "azizi saara-anne|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.082809"
+  },
+  "donald rodriguez|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.116406"
+  },
+  "benjamin nicholson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.200088"
+  },
+  "lainie ross|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.239293"
+  },
+  "ruiling zhang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.255713"
+  },
+  "cheng-wei ju|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:27.277593"
+  },
+  "cooley rory|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.284076"
+  },
+  "drew sheets|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.302248"
+  },
+  "emma wilkinson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.352148"
+  },
+  "henderson jake|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.397571"
+  },
+  "lutz olivia|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.420242"
+  },
+  "leah ziolkowski|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.466827"
+  },
+  "michael zelko|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.487594"
+  },
+  "althea bock-hughes|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.522390"
+  },
+  "anderson cara|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.541806"
+  },
+  "antonopoulos mira|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.562506"
+  },
+  "graham taylor|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.585253"
+  },
+  "joash lake|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.618862"
+  },
+  "colin sheehan|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.645464"
+  },
+  "amanda johnson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.665595"
+  },
+  "erik mcintire|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.686593"
+  },
+  "acero bedoya santiago|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.736883"
+  },
+  "hollinger maile|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.754732"
+  },
+  "caitlin wong|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.813040"
+  },
+  "natalya shelchkova|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.852406"
+  },
+  "debrosse hadley|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.889080"
+  },
+  "macdonald margo|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.915683"
+  },
+  "fonseca renee|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.965779"
+  },
+  "busch silas|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:27.989094"
+  },
+  "freya zhang|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.063472"
+  },
+  "huggins rosemary|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.086617"
+  },
+  "blanc jennifer|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.147349"
+  },
+  "keyport samantha|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.216269"
+  },
+  "correa-colón edgar|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.240173"
+  },
+  "greaney marie|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.266632"
+  },
+  "haley randolph|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.288597"
+  },
+  "barbara peysakhovich|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.320949"
+  },
+  "genevieve housman|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.390711"
+  },
+  "lozinski maya|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.445682"
+  },
+  "deshpande sarita|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.572261"
+  },
+  "lobb-rabe meike|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:28.638719"
+  },
+  "nakamura noboru|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.096852"
+  },
+  "eliu escudero|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.135480"
+  },
+  "cong ma|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.154048"
+  },
+  "benson farb|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.171311"
+  },
+  "kirill ponomarev|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.190279"
+  },
+  "blucher edward|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.209524"
+  },
+  "alexander ji|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.227192"
+  },
+  "dwyer gregory|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.246884"
+  },
+  "calegari francesco|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.265176"
+  },
+  "akhil mathew|university of chicago": {
+    "department": "Mathematics/Statistics",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:29.281603"
+  },
+  "gagliardi laura|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.287164"
+  },
+  "abigail vieregg|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.311169"
+  },
+  "paolo privitera|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.332686"
+  },
+  "bunbury freddy|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.350838"
+  },
+  "grandi luca|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.369966"
+  },
+  "julia kreiner|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.390162"
+  },
+  "shmuel weinberger|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.422252"
+  },
+  "panagiotis souganidis|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.439816"
+  },
+  "corlette kevin|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.457853"
+  },
+  "delacretaz luca|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.475642"
+  },
+  "caprioli damiano|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.494535"
+  },
+  "di sheng|university of chicago": {
+    "department": "Engineering",
+    "source": "heuristic",
+    "confidence": "medium",
+    "timestamp": "2025-09-01T00:33:29.515052"
+  },
+  "aragam nikhyl|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.535960"
+  },
+  "daniel holz|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.557499"
+  },
+  "fahim farah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.589491"
+  },
+  "rowan stuart|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.609268"
+  },
+  "coates michael|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.627631"
+  },
+  "rockova veronika|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.649405"
+  },
+  "emerton matthew|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.667551"
+  },
+  "daniil rudenko|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.686643"
+  },
+  "anne wilkinson|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.705068"
+  },
+  "cappello franck|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.724284"
+  },
+  "irvine william|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.746386"
+  },
+  "li ma|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.768410"
+  },
+  "atman shah|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.789103"
+  },
+  "berman marc|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.808153"
+  },
+  "aaron calderon|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:33:29.831185"
+  },
+  "ash ryan|stanford university": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:59:22.891830"
+  },
+  "baccus stephen|stanford university": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T00:59:22.969794"
+  },
+  "jiaqi li|university of chicago": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-01T23:53:08.870330"
   }
 }
