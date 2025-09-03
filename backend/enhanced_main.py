@@ -740,10 +740,13 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
         print(f"📊 Valid grants: {len(valid_grants)}")
         grants = valid_grants
         
-        # Separate active and terminated grants
+        # Separate active and terminated grants - use date-based logic when status is unclear
         active_grants = []
         terminated_grants = []
         total_funding = 0
+        
+        from datetime import datetime, timedelta
+        current_date = datetime.now()
         
         for grant in grants:
             try:
@@ -754,14 +757,44 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                 status = grant.get('award_status', '').lower()
                 is_active = grant.get('is_active')
                 
-                # Consider grant terminated if:
-                # 1. Explicitly marked in award_status, OR
-                # 2. NIH grant with is_active=False
-                if (status in ['terminated', 'cancelled', 'expired'] or 
-                    is_active is False):
+                # Primary classification: explicit status
+                is_explicitly_terminated = False
+                if status and status != 'unknown':
+                    is_explicitly_terminated = (status in ['terminated', 'cancelled', 'expired', 'completed', 'closed'])
+                elif is_active is False:  # NIH boolean field
+                    is_explicitly_terminated = True
+                
+                # Secondary classification: date-based for unclear status
+                is_date_terminated = False
+                end_date = grant.get('project_end_date')
+                if end_date and not is_explicitly_terminated:
+                    try:
+                        if isinstance(end_date, str):
+                            if 'T' in end_date:
+                                end_date_parsed = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                            else:
+                                end_date_parsed = datetime.strptime(end_date[:10], '%Y-%m-%d')
+                        else:
+                            end_date_parsed = end_date
+                        
+                        # Consider grants terminated if they ended more than 30 days ago
+                        if end_date_parsed < (current_date - timedelta(days=30)):
+                            is_date_terminated = True
+                            print(f"🔍 Date-based termination: {grant.get('project_num')} ended {end_date_parsed}")
+                    except Exception as e:
+                        print(f"⚠️ Date parsing error for grant {grant.get('project_num', 'unknown')}: {e}")
+                
+                # Classify grant
+                if is_explicitly_terminated or is_date_terminated:
                     terminated_grants.append(grant)
+                    # Add termination reason for debugging
+                    if is_explicitly_terminated:
+                        grant['termination_reason'] = f"Status: {status}, Active: {is_active}"
+                    else:
+                        grant['termination_reason'] = f"Date-based: ended {end_date}"
                 else:
                     active_grants.append(grant)
+                    
             except Exception as e:
                 print(f"⚠️ Error processing grant status: {e}")
                 continue
@@ -810,7 +843,7 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                         amount = float(grant.get('award_amount', 0) or 0)
                         dept_breakdown[dept] = dept_breakdown.get(dept, 0) + amount
                 
-                # Process terminated grants by department for cancelled grants analysis
+                # Process terminated grants by department - distinguish cancelled vs naturally ended grants
                 for grant in terminated_grants:
                     # Check if grant belongs to target institution
                     grant_org = grant.get('organization', {})
@@ -829,33 +862,96 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                     if is_institution_match:
                         pi_name = (grant.get('contact_pi_name') or grant.get('pi_name') or '').strip()
                         if pi_name:
-                            dept = get_department_string(pi_name, institution_name)
-                            # Normalize department name with NLP analysis if needed
-                            dept = normalize_department_name(dept, grant)
-                            amount = float(grant.get('award_amount', 0) or 0)
+                            # Determine if this is truly a CANCELLED grant vs naturally ended
+                            status = grant.get('award_status', '').lower()
+                            is_active = grant.get('is_active')
+                            termination_reason = grant.get('termination_reason', '')
                             
-                            # Track department losses
-                            cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
+                            # More comprehensive cancelled grant detection:
+                            # 1. Explicitly cancelled status
+                            # 2. Terminated before expected end date (early termination)  
+                            # 3. NIH grants marked as inactive outside normal completion
+                            # 4. Grants that ended more than 6 months ago (likely problematic if no renewal)
+                            is_truly_cancelled = False
                             
-                            # Track PI-level losses
-                            if pi_name not in cancelled_grants_by_pi:
-                                cancelled_grants_by_pi[pi_name] = {
-                                    'pi_name': pi_name,
-                                    'department': dept,
-                                    'lost_funding': 0,
-                                    'grants': []
-                                }
+                            if status in ['cancelled']:
+                                is_truly_cancelled = True
+                                print(f"🚫 Cancelled (explicit): {grant.get('project_num')} - status: {status}")
+                            elif is_active is False and status not in ['completed', 'expired']:
+                                is_truly_cancelled = True
+                                print(f"🚫 Cancelled (NIH inactive): {grant.get('project_num')} - is_active: False, status: {status}")
+                            elif 'terminated' in status and status not in ['terminated']:  # 'terminated' alone might be natural
+                                is_truly_cancelled = True
+                                print(f"🚫 Cancelled (terminated variant): {grant.get('project_num')} - status: {status}")
+                            elif termination_reason and 'Date-based' not in termination_reason:
+                                # If terminated by status (not date), more likely to be cancelled
+                                is_truly_cancelled = True
+                                print(f"🚫 Cancelled (status-based termination): {grant.get('project_num')} - {termination_reason}")
+                            else:
+                                # For date-based terminations, be more inclusive - count grants that ended 
+                                # more than 6 months ago as potentially "cancelled" funding loss
+                                end_date = grant.get('project_end_date')
+                                start_date = grant.get('project_start_date')
+                                if end_date:
+                                    try:
+                                        from datetime import datetime, timedelta
+                                        if isinstance(end_date, str):
+                                            if 'T' in end_date:
+                                                end_parsed = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                                            else:
+                                                end_parsed = datetime.strptime(end_date[:10], '%Y-%m-%d')
+                                        
+                                        # Be more inclusive: grants that ended more than 6 months ago
+                                        # represent funding loss even if they completed naturally
+                                        six_months_ago = datetime.now() - timedelta(days=180)
+                                        if end_parsed < six_months_ago:
+                                            is_truly_cancelled = True
+                                            print(f"🚫 Cancelled (funding loss): {grant.get('project_num')} - ended {end_parsed.strftime('%Y-%m-%d')} (old completion)")
+                                        
+                                        # Also check for unusually short grants (still relevant)
+                                        if start_date and is_truly_cancelled is False:
+                                            if isinstance(start_date, str):
+                                                if 'T' in start_date:
+                                                    start_parsed = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                                                else:
+                                                    start_parsed = datetime.strptime(start_date[:10], '%Y-%m-%d')
+                                            
+                                            # If grant ran for less than expected duration, might be cancelled
+                                            duration = (end_parsed - start_parsed).days
+                                            if duration < 365:  # Less than 1 year suggests early termination
+                                                is_truly_cancelled = True
+                                                print(f"🚫 Cancelled (short duration): {grant.get('project_num')} - only {duration} days")
+                                    except Exception as e:
+                                        print(f"⚠️ Date analysis error: {e}")
                             
-                            cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
-                            cancelled_grants_by_pi[pi_name]['grants'].append({
-                                'award_id': grant.get('project_num') or grant.get('award_id'),
-                                'title': grant.get('project_title', ''),  # Frontend expects 'title', not 'project_title'
-                                'abstract': grant.get('abstract', grant.get('project_abstract', '')),  # Add abstract for frontend
-                                'amount': amount,
-                                'status': grant.get('award_status', 'Unknown'),
-                                'end_date': grant.get('project_end_date'),
-                                'funding_agency': grant.get('funding_agency', 'Unknown')
-                            })
+                            if is_truly_cancelled:
+                                dept = get_department_string(pi_name, institution_name)
+                                # Normalize department name with NLP analysis if needed
+                                dept = normalize_department_name(dept, grant)
+                                amount = float(grant.get('award_amount', 0) or 0)
+                                
+                                # Track department losses
+                                cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
+                                
+                                # Track PI-level losses
+                                if pi_name not in cancelled_grants_by_pi:
+                                    cancelled_grants_by_pi[pi_name] = {
+                                        'pi_name': pi_name,
+                                        'department': dept,
+                                        'lost_funding': 0,
+                                        'grants': []
+                                    }
+                                
+                                cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
+                                cancelled_grants_by_pi[pi_name]['grants'].append({
+                                    'award_id': grant.get('project_num') or grant.get('award_id'),
+                                    'title': grant.get('project_title', ''),  # Frontend expects 'title', not 'project_title'
+                                    'abstract': grant.get('abstract', grant.get('project_abstract', '')),  # Add abstract for frontend
+                                    'amount': amount,
+                                    'status': grant.get('award_status', 'Unknown'),
+                                    'end_date': grant.get('project_end_date'),
+                                    'funding_agency': grant.get('funding_agency', 'Unknown')
+                                })
                         
             except Exception:
                 # Fallback to simple department detection
@@ -876,18 +972,68 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                         amount = float(grant.get('award_amount', 0) or 0)
                         dept_breakdown[dept_type] = dept_breakdown.get(dept_type, 0) + amount
                 
-                # Track cancelled grants by department
+                # Track cancelled grants by department (more inclusive detection)
                 for grant in terminated_grants:
-                    org_info = grant.get('organization', {})
-                    dept_type = 'Other'
+                    # Determine if this is truly a CANCELLED grant vs naturally ended
+                    status = grant.get('award_status', '').lower()
+                    is_active = grant.get('is_active')
+                    termination_reason = grant.get('termination_reason', '')
                     
-                    if isinstance(org_info, dict):
-                        dept_type = org_info.get('dept_type', 'Other')
-                    elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
-                        dept_type = org_info[0].get('dept_type', 'Other')
+                    # More comprehensive cancelled grant detection (funding loss)
+                    is_truly_cancelled = False
                     
-                    # Normalize department name with NLP analysis if needed
-                    dept_type = normalize_department_name(dept_type, grant)
+                    if status in ['cancelled']:
+                        is_truly_cancelled = True
+                    elif is_active is False and status not in ['completed', 'expired']:
+                        is_truly_cancelled = True
+                    elif 'terminated' in status and status not in ['terminated']:
+                        is_truly_cancelled = True
+                    elif termination_reason and 'Date-based' not in termination_reason:
+                        is_truly_cancelled = True
+                    else:
+                        # Be more inclusive: grants that ended more than 6 months ago
+                        # represent funding loss even if they completed naturally
+                        end_date = grant.get('project_end_date')
+                        start_date = grant.get('project_start_date')
+                        if end_date:
+                            try:
+                                from datetime import datetime, timedelta
+                                if isinstance(end_date, str):
+                                    if 'T' in end_date:
+                                        end_parsed = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                                    else:
+                                        end_parsed = datetime.strptime(end_date[:10], '%Y-%m-%d')
+                                
+                                # Include grants that ended more than 6 months ago as funding loss
+                                six_months_ago = datetime.now() - timedelta(days=180)
+                                if end_parsed < six_months_ago:
+                                    is_truly_cancelled = True
+                                
+                                # Also check for unusually short grants
+                                if start_date and not is_truly_cancelled:
+                                    if isinstance(start_date, str):
+                                        if 'T' in start_date:
+                                            start_parsed = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                                        else:
+                                            start_parsed = datetime.strptime(start_date[:10], '%Y-%m-%d')
+                                    
+                                    duration = (end_parsed - start_parsed).days
+                                    if duration < 365:  # Less than 1 year suggests early termination
+                                        is_truly_cancelled = True
+                            except Exception:
+                                pass
+                    
+                    if is_truly_cancelled:
+                        org_info = grant.get('organization', {})
+                        dept_type = 'Other'
+                        
+                        if isinstance(org_info, dict):
+                            dept_type = org_info.get('dept_type', 'Other')
+                        elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
+                            dept_type = org_info[0].get('dept_type', 'Other')
+                        
+                        # Normalize department name with NLP analysis if needed
+                        dept_type = normalize_department_name(dept_type, grant)
                     
                     if dept_type and dept_type != 'Other':
                         amount = float(grant.get('award_amount', 0) or 0)
@@ -910,22 +1056,63 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                     amount = float(grant.get('award_amount', 0) or 0)
                     dept_breakdown[dept_type] = dept_breakdown.get(dept_type, 0) + amount
             
-            # Track cancelled grants by department
+            # Track cancelled grants by department (more inclusive detection)
             for grant in terminated_grants:
-                org_info = grant.get('organization', {})
-                dept_type = 'Other'
+                # Determine if this is truly a CANCELLED grant vs naturally ended
+                status = grant.get('award_status', '').lower()
+                is_active = grant.get('is_active')
+                termination_reason = grant.get('termination_reason', '')
                 
-                if isinstance(org_info, dict):
-                    dept_type = org_info.get('dept_type', 'Other')
-                elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
-                    dept_type = org_info[0].get('dept_type', 'Other')
+                # More inclusive cancelled grant detection (same as main logic)
+                is_truly_cancelled = False
                 
-                # Normalize department name with NLP analysis if needed
-                dept_type = normalize_department_name(dept_type, grant)
+                if status in ['cancelled']:
+                    is_truly_cancelled = True
+                elif is_active is False and status not in ['completed', 'expired']:
+                    is_truly_cancelled = True
+                elif 'terminated' in status and status not in ['terminated']:
+                    is_truly_cancelled = True
+                elif termination_reason and 'Date-based' not in termination_reason:
+                    is_truly_cancelled = True
+                else:
+                    # Check for early termination based on duration
+                    end_date = grant.get('project_end_date')
+                    start_date = grant.get('project_start_date')
+                    if end_date and start_date:
+                        try:
+                            from datetime import datetime
+                            if isinstance(end_date, str):
+                                if 'T' in end_date:
+                                    end_parsed = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                                else:
+                                    end_parsed = datetime.strptime(end_date[:10], '%Y-%m-%d')
+                            if isinstance(start_date, str):
+                                if 'T' in start_date:
+                                    start_parsed = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                                else:
+                                    start_parsed = datetime.strptime(start_date[:10], '%Y-%m-%d')
+                            
+                            duration = (end_parsed - start_parsed).days
+                            if duration < 365:  # Less than 1 year suggests early termination
+                                is_truly_cancelled = True
+                        except Exception:
+                            pass
                 
-                if dept_type:
-                    amount = float(grant.get('award_amount', 0) or 0)
-                    cancelled_dept_losses[dept_type] = cancelled_dept_losses.get(dept_type, 0) + amount
+                if is_truly_cancelled:
+                    org_info = grant.get('organization', {})
+                    dept_type = 'Other'
+                    
+                    if isinstance(org_info, dict):
+                        dept_type = org_info.get('dept_type', 'Other')
+                    elif isinstance(org_info, list) and org_info and isinstance(org_info[0], dict):
+                        dept_type = org_info[0].get('dept_type', 'Other')
+                    
+                    # Normalize department name with NLP analysis if needed
+                    dept_type = normalize_department_name(dept_type, grant)
+                    
+                    if dept_type:
+                        amount = float(grant.get('award_amount', 0) or 0)
+                        cancelled_dept_losses[dept_type] = cancelled_dept_losses.get(dept_type, 0) + amount
         
         # Prepare cancelled grants analysis
         total_cancelled_funding = sum(cancelled_dept_losses.values())
