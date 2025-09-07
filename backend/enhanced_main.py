@@ -18,6 +18,15 @@ from optimized_cache import (
     clear_cache as clear_optimized_cache
 )
 
+# Try to import HHS parser, fallback if dependencies have issues
+try:
+    from hhs_terminated_grants_parser import HHSTerminatedGrantsParser
+    HHS_PARSER_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  HHS Parser temporarily unavailable due to dependency issue: {e}")
+    HHSTerminatedGrantsParser = None
+    HHS_PARSER_AVAILABLE = False
+
 # Global PI details cache
 pi_details_cache = {}
 
@@ -829,6 +838,76 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
         cancelled_dept_losses = {}
         cancelled_grants_by_pi = {}
         
+        # 🚨 NEW: Get official HHS terminated grants data first (if available)
+        if HHS_PARSER_AVAILABLE:
+            print("🏛️ Fetching official HHS terminated grants data...")
+            try:
+                hhs_parser = HHSTerminatedGrantsParser()
+                hhs_terminated_grants = await hhs_parser.get_terminated_grants(use_cache=True)
+                
+                if hhs_terminated_grants:
+                    # Filter for institution
+                    institution_hhs_grants = hhs_parser.filter_terminated_grants_by_institution(
+                        hhs_terminated_grants, institution_name
+                    )
+                    
+                    print(f"🎯 Found {len(institution_hhs_grants)} official HHS terminated grants for {institution_name}")
+                    
+                    # Process official HHS terminated grants
+                    for grant in institution_hhs_grants:
+                        pi_name = grant.get('contact_pi_name', '').strip()
+                        if not pi_name:
+                            # Try alternative PI name fields
+                            pi_name = grant.get('pi_name', '').strip()
+                        
+                        if pi_name:
+                            # Use department lookup if available
+                            if pi_cache:
+                                from pi_department_lookup import get_department_string
+                                dept = get_department_string(pi_name, institution_name)
+                            else:
+                                dept = "Other"
+                            
+                            # Normalize department name
+                            dept = normalize_department_name(dept, grant)
+                            amount = float(grant.get('award_amount', 0) or 0)
+                            
+                            # Track department losses
+                            cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
+                            
+                            # Track PI-level losses
+                            if pi_name not in cancelled_grants_by_pi:
+                                cancelled_grants_by_pi[pi_name] = {
+                                    'pi_name': pi_name,
+                                    'department': dept,
+                                    'lost_funding': 0,
+                                    'grants': []
+                                }
+                            
+                            cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
+                            cancelled_grants_by_pi[pi_name]['grants'].append({
+                                'award_id': grant.get('project_num', 'HHS-TERMINATED'),
+                                'title': grant.get('project_title', f"Terminated Grant {grant.get('project_num', 'Unknown')}"),
+                                'abstract': '',
+                                'amount': amount,
+                                'status': 'Officially Terminated (HHS)',
+                                'end_date': grant.get('termination_date', ''),
+                                'funding_agency': 'HHS',
+                                'source': 'Official HHS Terminated Grants (TAGGS)'
+                            })
+                            
+                            print(f"✅ Added official HHS terminated grant: {pi_name} - ${amount:,.0f}")
+                else:
+                    print("⚠️ No HHS terminated grants data available")
+                    
+            except Exception as e:
+                print(f"❌ Error fetching HHS terminated grants: {e}")
+                # Continue with inference-based analysis
+        else:
+            print("⚠️ HHS Parser not available due to dependency issues - using inference-based analysis only")
+        
+        print(f"📊 After HHS data: {len(cancelled_grants_by_pi)} PIs with officially terminated grants")
+        
         if pi_cache:
             try:
                 from pi_department_lookup import get_department_string
@@ -1207,7 +1286,7 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                     } for pi in top_cancelled_pis
                 ],
                 'department_losses': dict(sorted(cancelled_dept_losses.items(), key=lambda x: x[1], reverse=True)),
-                'methodology_note': 'Analysis based on fresh NIH/NSF grant status data tracking terminated and cancelled grants',
+                'methodology_note': 'Analysis combines official HHS terminated grants (TAGGS) with inference-based NIH/NSF grant status analysis for comprehensive cancelled grants tracking',
                 'cancelled_grants_by_pi': cancelled_grants_by_pi,  # Add raw data for detailed access
                 'debug_info': f"Raw cancelled_grants_by_pi has {len(cancelled_grants_by_pi)} PIs"  # Debug info
             },
