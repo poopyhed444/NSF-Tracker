@@ -729,6 +729,115 @@ async def analyze_nonrenewal_grants(institution_name: str, active_grants: list) 
             'error': str(e)
         }
 
+async def enrich_cancelled_grant_details(award_id: str, existing_grant_data: dict = None) -> dict:
+    """
+    Enrich cancelled grant with detailed information from NIH Reporter API
+    """
+    import httpx
+    
+    try:
+        print(f"🔍 Enriching cancelled grant details for {award_id}")
+        
+        # If we already have detailed grant data, use it
+        if existing_grant_data and existing_grant_data.get('abstract'):
+            print(f"✅ Using existing detailed data for {award_id}")
+            return {
+                'award_id': award_id,
+                'title': existing_grant_data.get('project_title', existing_grant_data.get('title', '')),
+                'abstract': existing_grant_data.get('abstract', existing_grant_data.get('project_abstract', '')),
+                'amount': existing_grant_data.get('award_amount', 0),
+                'status': existing_grant_data.get('award_status', 'Terminated'),
+                'end_date': existing_grant_data.get('project_end_date', ''),
+                'funding_agency': existing_grant_data.get('funding_agency', 'NIH'),
+                'source': 'Enhanced with NIH Reporter API'
+            }
+        
+        # Try to fetch detailed information from NIH Reporter API
+        timeout = httpx.Timeout(10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            
+            # NIH Reporter API search by project number
+            nih_url = "https://api.reporter.nih.gov/v2/projects/search"
+            nih_payload = {
+                "criteria": {
+                    "project_nums": [award_id]
+                },
+                "include_fields": [
+                    "ProjectNum", "ProjectTitle", "AbstractText", "AwardAmount",
+                    "ProjectStartDate", "ProjectEndDate", "OrgName", "ContactPiName",
+                    "PrincipalInvestigators", "FiscalYear", "Agency"
+                ]
+            }
+            
+            print(f"🌐 Calling NIH Reporter API for {award_id}")
+            response = await client.post(nih_url, json=nih_payload)
+            
+            if response.status_code == 200:
+                nih_data = response.json()
+                results = nih_data.get('results', [])
+                
+                if results:
+                    grant_detail = results[0]
+                    print(f"✅ Found detailed NIH data for {award_id}")
+                    
+                    return {
+                        'award_id': award_id,
+                        'title': grant_detail.get('project_title', grant_detail.get('ProjectTitle', '')),
+                        'abstract': grant_detail.get('abstract_text', grant_detail.get('AbstractText', '')),
+                        'amount': grant_detail.get('award_amount', grant_detail.get('AwardAmount', 0)),
+                        'status': 'Cancelled/Terminated',
+                        'end_date': grant_detail.get('project_end_date', grant_detail.get('ProjectEndDate', '')),
+                        'funding_agency': grant_detail.get('agency', grant_detail.get('Agency', 'NIH')),
+                        'source': 'NIH Reporter API'
+                    }
+                else:
+                    print(f"⚠️ No detailed data found in NIH Reporter for {award_id}")
+            
+            # If NIH doesn't have it, try NSF API as fallback
+            print(f"🌐 Trying NSF API for {award_id}")
+            nsf_url = f"https://api.nsf.gov/services/v1/awards.json"
+            nsf_params = {
+                'id': award_id,
+                'printFields': 'id,title,abstractText,fundsObligatedAmt,date,expDate,agency'
+            }
+            
+            nsf_response = await client.get(nsf_url, params=nsf_params)
+            
+            if nsf_response.status_code == 200:
+                nsf_data = nsf_response.json()
+                awards = nsf_data.get('response', {}).get('award', [])
+                
+                if awards:
+                    nsf_grant = awards[0]
+                    print(f"✅ Found detailed NSF data for {award_id}")
+                    
+                    return {
+                        'award_id': award_id,
+                        'title': nsf_grant.get('title', ''),
+                        'abstract': nsf_grant.get('abstractText', ''),
+                        'amount': nsf_grant.get('fundsObligatedAmt', 0),
+                        'status': 'Cancelled/Terminated',
+                        'end_date': nsf_grant.get('expDate', ''),
+                        'funding_agency': 'NSF',
+                        'source': 'NSF API'
+                    }
+            
+    except Exception as e:
+        print(f"❌ Error enriching grant {award_id}: {e}")
+    
+    # Fallback to basic information
+    print(f"⚠️ Using fallback data for {award_id}")
+    return {
+        'award_id': award_id,
+        'title': f"Cancelled Grant {award_id}",
+        'abstract': existing_grant_data.get('abstract', '') if existing_grant_data else '',
+        'amount': existing_grant_data.get('award_amount', 0) if existing_grant_data else 0,
+        'status': 'Cancelled/Terminated',
+        'end_date': existing_grant_data.get('project_end_date', '') if existing_grant_data else '',
+        'funding_agency': existing_grant_data.get('funding_agency', 'Unknown') if existing_grant_data else 'Unknown',
+        'source': 'Basic Information'
+    }
+
 async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cache: dict = None) -> dict:
     """
     Analyze institution using fresh NIH/NSF grant data
@@ -853,7 +962,7 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                     
                     print(f"🎯 Found {len(institution_hhs_grants)} official HHS terminated grants for {institution_name}")
                     
-                    # Process official HHS terminated grants
+                    # Process official HHS terminated grants with API enrichment
                     for grant in institution_hhs_grants:
                         pi_name = grant.get('contact_pi_name', '').strip()
                         if not pi_name:
@@ -872,6 +981,10 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                             dept = normalize_department_name(dept, grant)
                             amount = float(grant.get('award_amount', 0) or 0)
                             
+                            # Enrich grant with detailed information from NIH API
+                            award_id = grant.get('project_num', 'HHS-TERMINATED')
+                            enriched_grant = await enrich_cancelled_grant_details(award_id, grant)
+                            
                             # Track department losses
                             cancelled_dept_losses[dept] = cancelled_dept_losses.get(dept, 0) + amount
                             
@@ -886,17 +999,17 @@ async def analyze_fresh_nih_nsf_data(institution_name: str, grants: list, pi_cac
                             
                             cancelled_grants_by_pi[pi_name]['lost_funding'] += amount
                             cancelled_grants_by_pi[pi_name]['grants'].append({
-                                'award_id': grant.get('project_num', 'HHS-TERMINATED'),
-                                'title': grant.get('project_title', f"Terminated Grant {grant.get('project_num', 'Unknown')}"),
-                                'abstract': '',
-                                'amount': amount,
+                                'award_id': enriched_grant['award_id'],
+                                'title': enriched_grant['title'],
+                                'abstract': enriched_grant['abstract'],
+                                'amount': enriched_grant['amount'] or amount,
                                 'status': 'Officially Terminated (HHS)',
-                                'end_date': grant.get('termination_date', ''),
-                                'funding_agency': 'HHS',
-                                'source': 'Official HHS Terminated Grants (TAGGS)'
+                                'end_date': enriched_grant['end_date'] or grant.get('termination_date', ''),
+                                'funding_agency': enriched_grant['funding_agency'],
+                                'source': f"Official HHS + {enriched_grant['source']}"
                             })
                             
-                            print(f"✅ Added official HHS terminated grant: {pi_name} - ${amount:,.0f}")
+                            print(f"✅ Added enriched HHS terminated grant: {pi_name} - ${amount:,.0f} - {enriched_grant['title'][:60]}...")
                 else:
                     print("⚠️ No HHS terminated grants data available")
                     
