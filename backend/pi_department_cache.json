@@ -3304,5 +3304,341 @@
     "source": "heuristic",
     "confidence": "low",
     "timestamp": "2025-09-06T23:59:05.947657"
+  },
+  "abdullah saeed|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.072507"
+  },
+  "abi-dargham anissa|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.082148"
+  },
+  "aboudehen karam|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.089279"
+  },
+  "abraham evelyn|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.095655"
+  },
+  "abrahamsson dimitri|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.103441"
+  },
+  "abramovitch robert|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.110045"
+  },
+  "abramson david|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.117078"
+  },
+  "acharya yubraj|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.124146"
+  },
+  "adams alexandra|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.130682"
+  },
+  "adams walter|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.137836"
+  },
+  "addison daniel|state university of new york at binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-17T19:46:53.144357"
+  },
+  "deak terrence|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.218509"
+  },
+  "brandon gibb|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.236217"
+  },
+  "karin sauer|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.243630"
+  },
+  "bishop christopher|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.251141"
+  },
+  "hathout yetrib|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.257789"
+  },
+  "abbie chapman|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.264245"
+  },
+  "bing si|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.270697"
+  },
+  "wan yuan|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.276821"
+  },
+  "anushree karkhanis|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.283091"
+  },
+  "rao siyuan|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.292054"
+  },
+  "shahrzad towfighian|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.298734"
+  },
+  "tao zhang|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.305469"
+  },
+  "eriks rozners|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.311680"
+  },
+  "emily zale|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.318131"
+  },
+  "diaz marvin|state university of ny,binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T15:29:49.324808"
+  },
+  "deak terrence|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.682590"
+  },
+  "brandon gibb|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.703778"
+  },
+  "karin sauer|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.766972"
+  },
+  "bishop christopher|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.786901"
+  },
+  "hathout yetrib|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.931318"
+  },
+  "abbie chapman|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.952124"
+  },
+  "bing si|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:04.986089"
+  },
+  "wan yuan|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.010145"
+  },
+  "anushree karkhanis|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.028570"
+  },
+  "rao siyuan|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.103680"
+  },
+  "shahrzad towfighian|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.134395"
+  },
+  "tao zhang|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.191677"
+  },
+  "eriks rozners|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.233139"
+  },
+  "emily zale|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.253892"
+  },
+  "diaz marvin|university of ny binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:35:05.333087"
+  },
+  "deak terrence|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:21.205866"
+  },
+  "brandon gibb|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:48.995612"
+  },
+  "karin sauer|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.005388"
+  },
+  "bishop christopher|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.014438"
+  },
+  "hathout yetrib|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.024541"
+  },
+  "abbie chapman|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.033098"
+  },
+  "bing si|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.043140"
+  },
+  "wan yuan|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.052182"
+  },
+  "anushree karkhanis|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.061728"
+  },
+  "rao siyuan|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.071489"
+  },
+  "shahrzad towfighian|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.082407"
+  },
+  "tao zhang|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.130299"
+  },
+  "eriks rozners|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.137768"
+  },
+  "emily zale|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.145086"
+  },
+  "diaz marvin|binghamton": {
+    "department": "Other",
+    "source": "heuristic",
+    "confidence": "low",
+    "timestamp": "2025-09-18T16:39:49.153536"
   }
 }

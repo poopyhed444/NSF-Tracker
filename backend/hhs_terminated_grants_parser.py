@@ -54,6 +54,74 @@ class HHSTerminatedGrantsParser:
             print(f"❌ Unexpected error fetching PDF: {e}")
             raise
     
+    async def parse_pdf_with_text_extraction(self, pdf_content: bytes) -> List[Dict[str, Any]]:
+        """
+        Parse PDF using text extraction - more reliable for this format
+        """
+        try:
+            print("🔍 Attempting to parse PDF with text extraction...")
+            
+            import PyPDF2
+            import io
+            import re
+            
+            pdf_file = io.BytesIO(pdf_content)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            
+            terminated_grants = []
+            
+            for page_num, page in enumerate(pdf_reader.pages):
+                text = page.extract_text()
+                
+                # Look for grant patterns - based on the Binghamton example:
+                # NIH F31GM148053 5F31GM148053-03STATE UNIVERSITY OF 
+                # NY,BINGHAMTON NEW YORK UNITED STATES 6/12/2025
+                
+                # Pattern for NIH grants with institution info
+                grant_pattern = r'NIH\s+([A-Z0-9]+)\s+([A-Z0-9\-]+)\s*([A-Z\s,]+?)\s+((?:NEW YORK|CALIFORNIA|TEXAS|FLORIDA|PENNSYLVANIA|MASSACHUSETTS|MICHIGAN|ILLINOIS|OHIO|GEORGIA|NORTH CAROLINA|NEW JERSEY|VIRGINIA|WASHINGTON|ARIZONA|MARYLAND|WISCONSIN|MINNESOTA|COLORADO|ALABAMA|LOUISIANA|KENTUCKY|OREGON|OKLAHOMA|CONNECTICUT|IOWA|ARKANSAS|KANSAS|UTAH|NEVADA|NEW MEXICO|WEST VIRGINIA|NEBRASKA|IDAHO|HAWAII|MAINE|NEW HAMPSHIRE|RHODE ISLAND|MONTANA|DELAWARE|SOUTH DAKOTA|NORTH DAKOTA|ALASKA|VERMONT|WYOMING|TENNESSEE|INDIANA|MISSOURI|SOUTH CAROLINA|MISSISSIPPI|DISTRICT OF COLUMBIA|PUERTO RICO|US VIRGIN ISLANDS|GUAM|AMERICAN SAMOA|NORTHERN MARIANA ISLANDS)+)\s+UNITED STATES\s+([\d/]+)'
+                
+                matches = re.finditer(grant_pattern, text, re.IGNORECASE)
+                
+                for match in matches:
+                    award_number = match.group(1).strip()
+                    full_award_number = match.group(2).strip()
+                    recipient_name = match.group(3).strip()
+                    state = match.group(4).strip()
+                    termination_date = match.group(5).strip()
+                    
+                    # Clean up recipient name
+                    recipient_name = re.sub(r'\s+', ' ', recipient_name).strip()
+                    
+                    # Create grant record
+                    grant_record = {
+                        'award_number': award_number,
+                        'full_award_number': full_award_number,
+                        'recipient_name': recipient_name,
+                        'state': state,
+                        'termination_date': termination_date,
+                        'agency': 'NIH',
+                        'page': page_num + 1
+                    }
+                    
+                    terminated_grants.append(grant_record)
+                    print(f"📋 Found grant: {award_number} -> {recipient_name[:50]}...")
+            
+            # Remove duplicates
+            seen = set()
+            unique_grants = []
+            for grant in terminated_grants:
+                key = f"{grant['award_number']}_{grant['recipient_name']}"
+                if key not in seen:
+                    seen.add(key)
+                    unique_grants.append(grant)
+            
+            print(f"✅ Extracted {len(unique_grants)} unique terminated grants from PDF using text extraction")
+            return unique_grants
+            
+        except Exception as e:
+            print(f"❌ Error parsing PDF with text extraction: {e}")
+            return []
+
     def parse_pdf_with_tabula(self, pdf_content: bytes) -> List[Dict[str, Any]]:
         """
         Parse PDF using tabula-py (requires Java)
@@ -272,17 +340,29 @@ class HHSTerminatedGrantsParser:
             # Try multiple parsing methods
             terminated_grants = []
             
-            # Method 1: tabula (best for tables)
+            # Method 1: Text extraction (most reliable for this format)
             try:
-                terminated_grants = self.parse_pdf_with_tabula(pdf_content)
+                terminated_grants = await self.parse_pdf_with_text_extraction(pdf_content)
                 if terminated_grants:
-                    print(f"✅ Successfully parsed {len(terminated_grants)} grants with tabula")
+                    print(f"✅ Successfully parsed {len(terminated_grants)} grants with text extraction")
                 else:
-                    raise Exception("No grants found with tabula")
+                    print("⚠️ Text extraction returned no grants, trying tabula...")
             except Exception as e:
-                print(f"⚠️ Tabula parsing failed: {e}")
+                print(f"❌ Text extraction failed: {e}, trying tabula...")
+            
+            # Method 2: tabula (fallback)
+            if not terminated_grants:
+                try:
+                    terminated_grants = self.parse_pdf_with_tabula(pdf_content)
+                    if terminated_grants:
+                        print(f"✅ Successfully parsed {len(terminated_grants)} grants with tabula")
+                    else:
+                        print("⚠️ Tabula returned no grants, trying camelot...")
+                except Exception as e:
+                    print(f"❌ Tabula parsing failed: {e}")
                 
-                # Method 2: camelot (alternative table parser)
+            # Method 3: camelot (alternative table parser)
+            if not terminated_grants:
                 try:
                     terminated_grants = self.parse_pdf_with_camelot(pdf_content)
                     if terminated_grants:
